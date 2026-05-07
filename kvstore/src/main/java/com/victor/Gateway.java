@@ -131,6 +131,7 @@ public class Gateway {
             return sendWithTimeout(targetComponent, internalRequest, 100000);
         } catch (Exception e) {
             System.err.println("[Gateway] Erro de comunicação ao rotear '" + command + "' para " + targetComponent + ": " + e.getMessage());
+            jmeterError = "ERRO: " + e.toString();
             return jmeterError;
         }
     }

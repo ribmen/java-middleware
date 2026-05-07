@@ -5,9 +5,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.victor.client.UdpClient;
-
-
 public abstract class BaseComponent {
 
     protected final int componentPort;
@@ -79,13 +76,7 @@ public abstract class BaseComponent {
             try {
                 String myIp = InetAddress.getLocalHost().getHostAddress();
                 String request = String.format("HEARTBEAT|%s|%d|%s", myIp, componentPort, componentType);
-                
-                // Usa timeout customizado se disponível
-                if (clientToGateway instanceof UdpClient) {
-                    ((UdpClient) clientToGateway).sendWithRetry(gatewayHost, gatewayPort, request, HEARTBEAT_TIMEOUT_MS, 1);
-                } else {
-                    clientToGateway.send(gatewayHost, gatewayPort, request);
-                }
+                clientToGateway.send(gatewayHost, gatewayPort, request);
                 
                 // sucesso
                 if (i > 1) {

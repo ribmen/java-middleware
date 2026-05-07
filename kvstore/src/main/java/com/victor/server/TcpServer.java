@@ -67,19 +67,21 @@ public class TcpServer implements ComponentServer {
     }
 
     private void handleClient(Socket clientSocket, RequestHandler handler) {
-        
+        PrintWriter writer = null;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-             PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true)) {
+             PrintWriter w = new PrintWriter(clientSocket.getOutputStream(), true)) {
 
+                writer = w;
                 StringBuilder requestBuilder = new StringBuilder();
-                String line;
+                char[] buffer = new char[BUFFER_SIZE];
 
-                while ((line = reader.readLine()) != null) {
-                    requestBuilder.append(line);
-                    break;
+                int charsRead = reader.read(buffer);
+
+                if (charsRead != -1) {
+                    requestBuilder.append(buffer, 0, charsRead);
                 }
 
-                String request = requestBuilder.toString();
+                String request = requestBuilder.toString().trim();
 
                 if (request.length() == 0) {
                     return;
@@ -90,6 +92,11 @@ public class TcpServer implements ComponentServer {
                 }
 
                 String response = handler.handle(request);
+                System.out.println("[TCP SERVER] [DEBUG] Handler retornou: '" + response + "'");
+                if (response == null) {
+                    System.err.println("[TCP SERVER] [ERROR] Response é NULL!");
+                    response = "[TCP SERVER] Erro: resposta nula";
+                }
 
                 if (response.length() > BUFFER_SIZE) {
                 System.err.println("[TCP] AVISO: Resposta grande: " + response.length() + " bytes");
@@ -97,10 +104,19 @@ public class TcpServer implements ComponentServer {
                 }
 
                 writer.println(response);
+                System.out.println("[TCP SERVER] [DEBUG] Resposta de " + response.length() + " bytes enviada");
                 writer.flush();
 
              } catch (IOException e) {
                 System.err.println("Erro ao processar requisição TCP: " + e.getMessage());
+             } catch (Exception e) {
+                System.err.println("[TCP SERVER] Erro ao processar handler: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                if (writer != null) {
+                    try {
+                        writer.println("[TCP SERVER] Erro interno: " + e.getMessage());
+                        writer.flush();
+                    } catch (Exception ignored) { }
+                }
              } finally {
                 try{
                     clientSocket.close();
