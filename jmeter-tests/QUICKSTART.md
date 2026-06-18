@@ -37,16 +37,10 @@ cd kvstore
 mvn exec:java -Dexec.mainClass=com.victor.Gateway -Dexec.args="8000 HTTP"
 ```
 
-Terminal 2 - Passer (responsável por transações):
+Terminal 2 - Worker (responsável pelo KVStore):
 ```bash
 cd kvstore
-mvn exec:java -Dexec.mainClass=com.victor.PasserComponent -Dexec.args="8001 localhost 8000 HTTP"
-```
-
-Terminal 3 - Worker (responsável pelo KVStore):
-```bash
-cd kvstore
-mvn exec:java -Dexec.mainClass=com.victor.WorkerComponent -Dexec.args="8002 localhost 8000 HTTP"
+mvn exec:java -Dexec.mainClass=com.victor.WorkerComponent -Dexec.args="8001 localhost 8000 HTTP"
 ```
 
 ### 2. **Abrir JMeter GUI com Plano Carregado**
@@ -57,13 +51,7 @@ cd jmeter-tests
 jmeter -t kvstore_load_test.jmx
 ```
 
-Abrirá a GUI com 5 testes HTTP pré-configurados:
-- 01 - REGISTER Passer
-- 02 - REGISTER Worker
-- 03 - HEARTBEAT 
-- 04 - WRITE
-- 05 - READ
-- 06 - ROUTE_TO_WORKER
+Abrirá a GUI com testes HTTP pré-configurados (WRITE, READ, etc.).
 
 ### 3. **Ajustar Parâmetros (Opcional)**
 
@@ -127,7 +115,7 @@ No painel esquerdo, clique em **Summary Report** para ver a tabela com:
 ### No Summary Report (Tabela)
 | Métrica | Esperado | Ação se Fora |
 |---------|----------|-------------|
-| **Throughput** | 100-500 req/s | Se baixo: aumenta workers/passers |
+| **Throughput** | 100-500 req/s | Se baixo: aumenta workers |
 | **Average** | 10-50 ms | Se alto: possível gargalo no processamento |
 | **Error %** | 0% | Se > 1%: sistema sobrecarregado |
 | **Max** | < 500 ms | Se alto: picos de latência |
@@ -139,7 +127,7 @@ REGISTER             1000     5 ms     2 ms  20 ms  0%       100 req/s
 HEARTBEAT            1000     3 ms     1 ms  10 ms  0%       100 req/s
 WRITE                5000     25 ms    5 ms  150 ms 0%       500 req/s
 READ                 5000     20 ms    4 ms  120 ms 0%       500 req/s
-ROUTE_TO_WORKER      2000     45 ms    10 ms 250 ms 0%       200 req/s
+
 ```
 
 ---
@@ -196,7 +184,7 @@ Para visualizar latência ao longo do tempo (debug de degradação):
 
 ### Erro: "Connection refused"
 - ✅ Verificar se Gateway está rodando: `netstat -tlnp | grep 8000`
-- ✅ Verificar se componentes Passer/Worker estão conectados (devem aparecer logs no Gateway)
+- ✅ Verificar se componentes Worker estão conectados (devem aparecer logs no Gateway)
 
 ### Erro: "Out of Memory"
 - Antes de rodar jmeter, aumente heap:
@@ -206,13 +194,13 @@ jmeter -t kvstore_load_test.jmx
 ```
 
 ### Error Rate > 1%
-- Verificar logs do Gateway/Workers/Passers para erros
+- Verificar logs do Gateway/Workers para erros
 - Aumentar `rampup` para evitar pico inicial
-- Adicionar mais Workers/Passers
+- Adicionar mais Workers
 
 ### Throughput plateou
 - É o limite de throughput esperado
-- Para aumentar, adicione mais componentes (Workers/Passers)
+- Para aumentar, adicione mais componentes (Workers)
 - Ou reduza payload para testar apenas overhead de rede
 
 ---
@@ -221,11 +209,10 @@ jmeter -t kvstore_load_test.jmx
 
 | Rota | Descrição | Body Exemplo | Resposta |
 |------|-----------|--------------|----------|
-| `/REGISTER` | Registrar componente | `127.0.0.1\|8001\|PASSER_ON` | `SUCESSO` |
-| `/HEARTBEAT` | Verificar vitalidade | `127.0.0.1\|8001\|PASSER_ON` | `OK` |
+| `/REGISTER` | Registrar componente | `127.0.0.1\|8001` | `SUCESSO` |
+| `/HEARTBEAT` | Verificar vitalidade | `127.0.0.1\|8001` | `OK` |
 | `/WRITE` | Escrever chave-valor | `key\|value` | confirmação |
 | `/READ` | Ler valor de chave | `key` | valor ou `NOT_FOUND` |
-| `/ROUTE_TO_WORKER` | Rotear para Passer | `WRITE\|key\|value` | resultado |
 
 ---
 

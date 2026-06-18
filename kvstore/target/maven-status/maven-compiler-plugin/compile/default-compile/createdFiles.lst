@@ -1,6 +1,5 @@
 com/victor/server/HttpServer.class
 com/victor/ComponentServer.class
-com/victor/ComponentType.class
 com/victor/CommunicationFactory$1.class
 com/victor/server/TcpServer.class
 com/victor/business/VersionedValue.class
@@ -15,6 +14,5 @@ com/victor/client/HttpClient.class
 com/victor/client/TcpClient.class
 com/victor/client/UdpClient.class
 com/victor/BaseComponent.class
-com/victor/PasserComponent.class
 com/victor/CommunicationFactory.class
 com/victor/RequestHandler.class

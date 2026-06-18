@@ -7,11 +7,12 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class BaseComponent {
 
+    private static final String NODE_LABEL = "WORKER";
+
     protected final int componentPort;
     protected final String gatewayHost;
     protected final int gatewayPort;
     protected final CommunicationType type;
-    protected final ComponentType componentType;
 
     private ComponentServer server;
     private final ComponentClient clientToGateway;
@@ -21,12 +22,11 @@ public abstract class BaseComponent {
     private static final int MAX_HEARTBEAT_RETRIES = 2;
 
 
-    public BaseComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type, ComponentType componentType) {
+    public BaseComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type) {
         this.componentPort = componentPort;
         this.gatewayHost = gatewayHost;
         this.gatewayPort = gatewayPort;
         this.type = type;
-        this.componentType = componentType;
         this.clientToGateway = CommunicationFactory.createClient(type);
     }
 
@@ -35,7 +35,7 @@ public abstract class BaseComponent {
         server = CommunicationFactory.createServer(type);
         server.start(componentPort , getRequestHandler());
 
-        System.out.printf("[%s] Servidor iniciado na porta %d\n", componentType, componentPort);
+        System.out.printf("[%s] Servidor iniciado na porta %d\n", NODE_LABEL, componentPort);
 
         registerWithGateway();
         startHeartbeat();
@@ -44,18 +44,18 @@ public abstract class BaseComponent {
 
     private void registerWithGateway() throws Exception {
         String myIp = InetAddress.getLocalHost().getHostAddress();
-        String request = String.format("REGISTER|%s|%d|%s", myIp, componentPort, componentType);
-        
+        String request = String.format("REGISTER|%s|%d", myIp, componentPort);
+
         // Retry no registro
         Exception lastException = null;
         for (int i = 0; i < 3; i++) {
             try {
                 String response = clientToGateway.send(gatewayHost, gatewayPort, request);
-                System.out.printf("[%s] Resposta do registro no Gateway: %s\n", componentType, response);
+                System.out.printf("[%s] Resposta do registro no Gateway: %s\n", NODE_LABEL, response);
                 return; // Sucesso
             } catch (Exception e) {
                 lastException = e;
-                System.err.printf("[%s] Falha no registro (tentativa %d): %s\n", componentType, i+1, e.getMessage());
+                System.err.printf("[%s] Falha no registro (tentativa %d): %s\n", NODE_LABEL, i+1, e.getMessage());
                 if (i < 2) Thread.sleep(1000);
             }
         }
@@ -74,19 +74,19 @@ public abstract class BaseComponent {
         for (int i = 1; i <= MAX_HEARTBEAT_RETRIES; i++) {
             try {
                 String myIp = InetAddress.getLocalHost().getHostAddress();
-                String request = String.format("HEARTBEAT|%s|%d|%s", myIp, componentPort, componentType);
+                String request = String.format("HEARTBEAT|%s|%d", myIp, componentPort);
                 clientToGateway.send(gatewayHost, gatewayPort, request);
-                
+
                 // fez retry
                 if (i > 1) {
-                    System.out.printf("[%s] Heartbeat recuperado na tentativa %d\n", componentType, i);
+                    System.out.printf("[%s] Heartbeat recuperado na tentativa %d\n", NODE_LABEL, i);
                 }
                 return;
-                
+
             } catch (Exception e) {
                 if (i == MAX_HEARTBEAT_RETRIES) {
-                    System.err.printf("[%s] Falha ao enviar heartbeat após %d tentativas: %s\n", 
-                                     componentType, MAX_HEARTBEAT_RETRIES, e.getMessage());
+                    System.err.printf("[%s] Falha ao enviar heartbeat após %d tentativas: %s\n",
+                                     NODE_LABEL, MAX_HEARTBEAT_RETRIES, e.getMessage());
                 }
                 
                 try {

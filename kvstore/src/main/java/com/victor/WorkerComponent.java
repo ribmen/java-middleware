@@ -7,9 +7,9 @@ public class WorkerComponent extends BaseComponent {
     private final ComponentClient clientToGateway;
     private KVStore kvStore;
     
-    public WorkerComponent(int componentPort, String gatewayHost, int gatewayPort, ComponentType componentType, CommunicationType type) {
-        
-        super(componentPort, gatewayHost, gatewayPort, type, componentType);
+    public WorkerComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type) {
+
+        super(componentPort, gatewayHost, gatewayPort, type);
 
         this.kvStore = new KVStore(new java.util.HashMap<>());
         this.clientToGateway = CommunicationFactory.createClient(type);
@@ -51,7 +51,7 @@ public class WorkerComponent extends BaseComponent {
         int gatewayPort = Integer.parseInt(args[2]);
         CommunicationType type = CommunicationType.valueOf(args[3].toUpperCase());
 
-        new WorkerComponent(myPort, gatewayHost, gatewayPort, ComponentType.WORKER, type).start();
+        new WorkerComponent(myPort, gatewayHost, gatewayPort, type).start();
     }
 
 }

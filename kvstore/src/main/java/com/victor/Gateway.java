@@ -56,8 +56,8 @@ public class Gateway {
 
     private String handleHeartbeat(String[] parts) {
         try {
-            // PADRÃO: HEARTBEAT|IP|PORTA|TIPO
-            String componentId = parts[3] + "@" + parts[1] + ":" + parts[2];
+            // PADRÃO: HEARTBEAT|IP|PORTA
+            String componentId = parts[1] + ":" + parts[2];
             ComponentInfo info = serviceRegistry.get(componentId);
             if (info != null) {
                 info.setLastHeartbeat();
@@ -87,19 +87,15 @@ public class Gateway {
 
     private String handleRegistration(String[] parts) {
         try {
-            // PADRÃO: REGISTER|IP|PORTA|TIPO DE NODE
+            // PADRÃO: REGISTER|IP|PORTA
             InetAddress address = InetAddress.getByName(parts[1]);
             int componentPort = Integer.parseInt(parts[2]);
-            ComponentType type = ComponentType.valueOf(parts[3]);
-            String componentId = type + "@" + address.getHostAddress() + ":" + componentPort;
-    
-            serviceRegistry.put(componentId, new ComponentInfo(address, componentPort, type));
+            String componentId = address.getHostAddress() + ":" + componentPort;
+
+            serviceRegistry.put(componentId, new ComponentInfo(address, componentPort));
             System.out.println("[GATEWAY] Componente registrado: " + componentId);
-    
-            long workersCount = serviceRegistry.values().stream().filter(c -> c.getType() == ComponentType.WORKER).count();
-            long passersCount = serviceRegistry.values().stream().filter(c -> c.getType() == ComponentType.PASSER_ON).count();
-            System.out.printf("[GATEWAY] NODES - Workers: %d, TransactionProcessors: %d\n", workersCount, passersCount);
-    
+            System.out.printf("[GATEWAY] NODES - Workers: %d\n", serviceRegistry.size());
+
             return "SUCESSO: Registrado.";
         } catch (Exception e) {
             return "ERRO: Falha ao registrar componente. Formato inválido.";
@@ -107,22 +103,7 @@ public class Gateway {
     }
 
     private String routeRequest(String command, String payload) {
-        ComponentInfo targetComponent = null;
-        String jmeterError = "[GATEWAY] ERRO AO ACESSAR O GATEWAY (INDISPONÍVEL)";
         try {
-            if (command.equals("ROUTE_TO_WORKER")) {
-                targetComponent = findAvailableComponent(ComponentType.PASSER_ON);
-                if (targetComponent == null) {
-                    System.err.println("[GATEWAY] Nenhum node disponível para a operação " + command);
-                    return jmeterError;
-                }
-
-                String internalRequest = command + (payload.isEmpty() ? "" : "|" + payload);
-                System.out.printf("[GATEWAY] Roteando comando original '%s' como '%s' para %s\n", command,
-                        internalRequest.split("\\|")[0], targetComponent);
-                return sendWithTimeout(targetComponent, internalRequest, 100000);
-            }
-
             if (command.equals("WRITE")) {
                 return routeWrite(payload);
             }
@@ -133,14 +114,13 @@ public class Gateway {
 
             return "ERRO: Comando desconhecido: " + command;
         } catch (Exception e) {
-            System.err.println("[Gateway] Erro de comunicação ao rotear '" + command + "' para " + targetComponent + ": " + e.getMessage());
-            jmeterError = "ERRO: " + e.toString();
-            return jmeterError;
+            System.err.println("[Gateway] Erro de comunicação ao rotear '" + command + "': " + e.getMessage());
+            return "ERRO: " + e.toString();
         }
     }
 
     private String routeWrite(String payload) {
-        ComponentInfo target = findAvailableComponent(ComponentType.WORKER);
+        ComponentInfo target = findAvailableComponent();
         if (target == null) {
             return "[GATEWAY] ERRO: Nenhum WORKER disponivel para WRITE";
         }
@@ -157,7 +137,7 @@ public class Gateway {
     }
 
     private String routeRead(String payload) {
-        ComponentInfo target = findAvailableComponent(ComponentType.WORKER);
+        ComponentInfo target = findAvailableComponent();
         if (target == null) {
             return "[GATEWAY] ERRO: Nenhum WORKER disponivel para READ";
         }
@@ -173,19 +153,17 @@ public class Gateway {
         }
     }
 
-    private ComponentInfo findAvailableComponent(ComponentType type) {
+    private ComponentInfo findAvailableComponent() {
         List<ComponentInfo> candidatos = serviceRegistry.values().stream()
-                .filter(c -> c.getType() == type)
                 .filter(c -> (System.currentTimeMillis() - c.getLastHeartbeat()) <= 30000)
                 .collect(ArrayList::new, (list, item) -> list.add(item), List::addAll);
-        
+
         if (candidatos.isEmpty()) {
             return null;
         }
-int index = roundRobinCounter.getAndIncrement() % candidatos.size();
+        int index = roundRobinCounter.getAndIncrement() % candidatos.size();
         ComponentInfo escolhido = candidatos.get(index);
-        System.out.println("[GATEWAY] Componente escolhido (Round-Robin " + index + ")");
-        System.out.println("[GATEWAY] Componente escolhido: " + escolhido.toString());
+        System.out.println("[GATEWAY] Componente escolhido (Round-Robin " + index + "): " + escolhido);
         return escolhido;
 
     }

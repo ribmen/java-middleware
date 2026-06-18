@@ -7,7 +7,6 @@
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/server/TcpServer.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/CommunicationType.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/Gateway.java
-/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/ComponentType.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/client/TcpClient.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/ComponentClient.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/client/UdpClient.java
@@ -16,4 +15,3 @@
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/business/VersionedValue.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/WorkerComponent.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/ComponentServer.java
-/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/PasserComponent.java

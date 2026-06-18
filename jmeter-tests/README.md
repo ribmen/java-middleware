@@ -15,24 +15,7 @@ Se quiser **automação via CLI** (opcional):
 
 O Gateway expõe as seguintes rotas via HTTP. O comando é extraído do **path** (`/COMANDO`) e o payload do **body** (POST).
 
-### 1. **ROUTE_TO_WORKER** (Rota para Passer)
-Acessa um componente Passer para processar transações.
-
-**Requisição:**
-```
-POST /ROUTE_TO_WORKER HTTP/1.1
-Host: localhost:8000
-Content-Type: text/plain
-Content-Length: 20
-
-WRITE|key1|value1
-```
-
-**Resposta esperada:** OK ou erro
-
----
-
-### 2. **WRITE** (Escrita no KVStore)
+### 1. **WRITE** (Escrita no KVStore)
 Escreve um valor na chave especificada.
 
 **Requisição:**
@@ -49,7 +32,7 @@ key1|value_test
 
 ---
 
-### 3. **READ** (Leitura no KVStore)
+### 2. **READ** (Leitura no KVStore)
 Lê o valor de uma chave.
 
 **Requisição:**
@@ -66,27 +49,26 @@ key1
 
 ---
 
-### 4. **REGISTER** (Registro de Componente)
-Registra um novo componente Worker/Passer no Gateway.
+### 3. **REGISTER** (Registro de Componente)
+Registra um novo componente Worker no Gateway.
 
 **Requisição:**
 ```
 POST /REGISTER HTTP/1.1
 Host: localhost:8000
 Content-Type: text/plain
-Content-Length: 28
+Content-Length: 21
 
-127.0.0.1|8001|PASSER_ON
+127.0.0.1|8001
 ```
 
-**Formato:** `IP|PORTA|TIPO_COMPONENTE`
-- **TIPO_COMPONENTE:** `WORKER`, `PASSER_ON`
+**Formato:** `IP|PORTA`
 
 **Resposta esperada:** "SUCESSO: Registrado."
 
 ---
 
-### 5. **HEARTBEAT** (Verificação de Vitalidade)
+### 4. **HEARTBEAT** (Verificação de Vitalidade)
 Atualiza o timestamp do heartbeat de um componente registrado.
 
 **Requisição:**
@@ -94,12 +76,12 @@ Atualiza o timestamp do heartbeat de um componente registrado.
 POST /HEARTBEAT HTTP/1.1
 Host: localhost:8000
 Content-Type: text/plain
-Content-Length: 28
+Content-Length: 21
 
-127.0.0.1|8001|PASSER_ON
+127.0.0.1|8001
 ```
 
-**Formato:** `IP|PORTA|TIPO_COMPONENTE`
+**Formato:** `IP|PORTA`
 
 **Resposta esperada:** "OK"
 
@@ -108,12 +90,12 @@ Content-Length: 28
 ## Configuração de Teste JMeter
 
 ### Arquivos Disponíveis
-- `kvstore_load_test.jmx` — Plano JMeter com 5 testes de rotas (READ, WRITE, ROUTE_TO_WORKER, REGISTER, HEARTBEAT)
+- `kvstore_load_test.jmx` — Plano JMeter com testes de rotas (READ, WRITE, REGISTER, HEARTBEAT)
 
 ### Pré-requisitos
 1. **JMeter** instalado (download: https://jmeter.apache.org/download_jmeter.cgi)
 2. **Gateway rodando:** `mvn exec:java -Dexec.mainClass=com.victor.Gateway -Dexec.args="8000 HTTP"`
-3. **Workers/Passers registrados** (ou configure o teste para auto-registrar)
+3. **Workers registrados** (ou configure o teste para auto-registrar)
 
 ---
 
@@ -244,16 +226,16 @@ jmeter -g results_normal.jtl -o report_normal
 
 ### Erro: "Connection refused"
 - Verifique se o Gateway está rodando: `netstat -an | grep 8000`
-- Verifique se Workers/Passers estão conectados
+- Verifique se Workers estão conectados
 
 ### Taxa de Erro Alta
-- Aumentar Workers/Passers registrados
+- Aumentar Workers registrados
 - Verificar logs do Gateway para erros
 - Aumentar `rampup` para evitar picos iniciais
 
 ### Throughput Muito Baixo
 - É possível que seja o limite esperado para a carga
-- Para aumentar, adicionar mais Workers/Passers
+- Para aumentar, adicionar mais Workers
 - Ou reduzir payload para testar apenas overhead de rede
 
 ### Out of Memory (GUI Crash)
@@ -283,7 +265,7 @@ Para fazer um teste rápido das rotas com curl:
 ```bash
 cd jmeter-tests
 ./test_routes.sh
-# Testa REGISTER, HEARTBEAT, WRITE, READ, ROUTE_TO_WORKER
+# Testa REGISTER, HEARTBEAT, WRITE, READ
 ```
 
 ---

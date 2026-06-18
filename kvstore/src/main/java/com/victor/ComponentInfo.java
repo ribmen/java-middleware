@@ -5,13 +5,11 @@ import java.net.InetAddress;
 public class ComponentInfo {
     private final InetAddress address;
     private final int port;
-    private final ComponentType type;
     private long lastHeartbeat;
 
-    public ComponentInfo(InetAddress address, int port, ComponentType type) {
+    public ComponentInfo(InetAddress address, int port) {
         this.address = address;
         this.port = port;
-        this.type = type;
         this.lastHeartbeat = System.currentTimeMillis();
     }
 
@@ -21,10 +19,6 @@ public class ComponentInfo {
 
     public int getPort() {
         return port;
-    }
-
-    public ComponentType getType() {
-        return type;
     }
 
     public void setLastHeartbeat() {
@@ -37,7 +31,7 @@ public class ComponentInfo {
 
     @Override
     public String toString() {
-        return "Component http://" + address + ":" + port + " do tipo " + type;
+        return "Component http://" + address + ":" + port;
     }
 
 }
