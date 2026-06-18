@@ -16,6 +16,5 @@ com/victor/client/TcpClient.class
 com/victor/client/UdpClient.class
 com/victor/BaseComponent.class
 com/victor/PasserComponent.class
-com/victor/server/GrpcServer.class
 com/victor/CommunicationFactory.class
 com/victor/RequestHandler.class

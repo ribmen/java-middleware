@@ -18,7 +18,8 @@ public class KVStore {
         if (store.containsKey(key)) {
             newVersion = store.get(key).getVersion() + 1;
         }
-        store.put(key, new VersionedValue(value, newVersion));
+        long timestamp = System.currentTimeMillis();
+        store.put(key, new VersionedValue(value, newVersion, timestamp));
         System.out.println("Write key: " + key + ", value: " + value + ", version: " + newVersion);
         return "Written key: " + key + ", value: " + value + ", version: " + newVersion;
     }

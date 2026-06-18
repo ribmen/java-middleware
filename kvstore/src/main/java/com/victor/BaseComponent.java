@@ -18,7 +18,6 @@ public abstract class BaseComponent {
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
 
     private static final int HEARTBEAT_INTERVAL_SECONDS = 10;
-    private static final int HEARTBEAT_TIMEOUT_MS = 2000;
     private static final int MAX_HEARTBEAT_RETRIES = 2;
 
 
@@ -47,7 +46,7 @@ public abstract class BaseComponent {
         String myIp = InetAddress.getLocalHost().getHostAddress();
         String request = String.format("REGISTER|%s|%d|%s", myIp, componentPort, componentType);
         
-        // Retry na registração
+        // Retry no registro
         Exception lastException = null;
         for (int i = 0; i < 3; i++) {
             try {
@@ -56,7 +55,7 @@ public abstract class BaseComponent {
                 return; // Sucesso
             } catch (Exception e) {
                 lastException = e;
-                System.err.printf("[%s] Falha na registração (tentativa %d): %s\n", componentType, i+1, e.getMessage());
+                System.err.printf("[%s] Falha no registro (tentativa %d): %s\n", componentType, i+1, e.getMessage());
                 if (i < 2) Thread.sleep(1000);
             }
         }
@@ -78,7 +77,7 @@ public abstract class BaseComponent {
                 String request = String.format("HEARTBEAT|%s|%d|%s", myIp, componentPort, componentType);
                 clientToGateway.send(gatewayHost, gatewayPort, request);
                 
-                // sucesso
+                // fez retry
                 if (i > 1) {
                     System.out.printf("[%s] Heartbeat recuperado na tentativa %d\n", componentType, i);
                 }

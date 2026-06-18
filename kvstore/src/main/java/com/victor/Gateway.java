@@ -20,7 +20,6 @@ public class Gateway {
     private final ComponentClient internalClient;
     private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     private final java.util.concurrent.atomic.AtomicInteger roundRobinCounter = new AtomicInteger(0);
-    
     public Gateway(int port, CommunicationType type) {
         this.port = port;
         this.type = type;
@@ -72,7 +71,7 @@ public class Gateway {
     }
 
     private void startHeartbeatCheck() {
-        // A cada 10 segundos, verifica se algum componente não envia heartbeat há mais de 15 segundos.
+        // A cada 10 segundos, verifica se algum componente não envia heartbeat há mais de 30 segundos.
 
         heartbeatScheduler.scheduleAtFixedRate(() -> {
             long now = System.currentTimeMillis();
@@ -111,28 +110,66 @@ public class Gateway {
         ComponentInfo targetComponent = null;
         String jmeterError = "[GATEWAY] ERRO AO ACESSAR O GATEWAY (INDISPONÍVEL)";
         try {
-            
-            targetComponent = switch (command) {
-                case "ROUTE_TO_WORKER" -> findAvailableComponent(ComponentType.PASSER_ON);
-                case "WRITE" -> findAvailableComponent(ComponentType.WORKER);
-                case "READ" -> findAvailableComponent(ComponentType.WORKER);
-                default -> null;
-            };
+            if (command.equals("ROUTE_TO_WORKER")) {
+                targetComponent = findAvailableComponent(ComponentType.PASSER_ON);
+                if (targetComponent == null) {
+                    System.err.println("[GATEWAY] Nenhum node disponível para a operação " + command);
+                    return jmeterError;
+                }
 
-            if (targetComponent == null) {
-                System.err.println("[GATEWAY] Nenhum node disponível para a operação " + command);
-                return jmeterError;
+                String internalRequest = command + (payload.isEmpty() ? "" : "|" + payload);
+                System.out.printf("[GATEWAY] Roteando comando original '%s' como '%s' para %s\n", command,
+                        internalRequest.split("\\|")[0], targetComponent);
+                return sendWithTimeout(targetComponent, internalRequest, 100000);
             }
 
-            String internalRequest = command + (payload.isEmpty() ? "" : "|" + payload);
+            if (command.equals("WRITE")) {
+                return routeWrite(payload);
+            }
 
-            System.out.printf("[GATEWAY] Roteando comando original '%s' como '%s' para %s\n", command, internalRequest.split("\\|")[0], targetComponent);
+            if (command.equals("READ")) {
+                return routeRead(payload);
+            }
 
-            return sendWithTimeout(targetComponent, internalRequest, 100000);
+            return "ERRO: Comando desconhecido: " + command;
         } catch (Exception e) {
             System.err.println("[Gateway] Erro de comunicação ao rotear '" + command + "' para " + targetComponent + ": " + e.getMessage());
             jmeterError = "ERRO: " + e.toString();
             return jmeterError;
+        }
+    }
+
+    private String routeWrite(String payload) {
+        ComponentInfo target = findAvailableComponent(ComponentType.WORKER);
+        if (target == null) {
+            return "[GATEWAY] ERRO: Nenhum WORKER disponivel para WRITE";
+        }
+
+        String request = "WRITE" + (payload.isEmpty() ? "" : "|" + payload);
+        try {
+            String response = sendWithTimeout(target, request, 100000);
+            System.out.println("[GATEWAY] WRITE roteado para " + target);
+            return response;
+        } catch (Exception e) {
+            System.err.println("[GATEWAY] WRITE falhou em " + target + ": " + e.getMessage());
+            return "ERRO: WRITE_FAILED em " + target + ": " + e.getMessage();
+        }
+    }
+
+    private String routeRead(String payload) {
+        ComponentInfo target = findAvailableComponent(ComponentType.WORKER);
+        if (target == null) {
+            return "[GATEWAY] ERRO: Nenhum WORKER disponivel para READ";
+        }
+
+        String request = "READ" + (payload.isEmpty() ? "" : "|" + payload);
+        try {
+            String response = sendWithTimeout(target, request, 100000);
+            System.out.println("[GATEWAY] READ roteado para " + target);
+            return response;
+        } catch (Exception e) {
+            System.err.println("[GATEWAY] READ falhou em " + target + ": " + e.getMessage());
+            return "ERRO: READ_FAILED em " + target + ": " + e.getMessage();
         }
     }
 
@@ -175,7 +212,7 @@ int index = roundRobinCounter.getAndIncrement() % candidatos.size();
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            System.out.println("Lembre-se: java Gateway <porta> <UDP| TCP|GRPC|HTTP>");
+            System.out.println("Lembre-se: java Gateway <porta> <TCP|HTTP>");
             return;
         }
         int port = Integer.parseInt(args[0]);

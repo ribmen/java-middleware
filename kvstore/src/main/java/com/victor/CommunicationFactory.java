@@ -17,9 +17,6 @@ public class CommunicationFactory {
                 return new HttpServer();
             case UDP:
                 return new UdpServer();
-            case GRPC:
-                throw new IllegalArgumentException("gRPC não suportado");
-        
             default:
                 throw new IllegalArgumentException("Tipo de servidor não suportado ou desconhecido: " + type);
         }
@@ -33,9 +30,6 @@ public class CommunicationFactory {
                 return new HttpClient();
             case UDP:
                 return new UdpClient();
-            case GRPC:
-                throw new IllegalArgumentException("gRPC não suportado");
-
             default:
                 throw new IllegalArgumentException("Tipo de client não suportado ou desconhecido: " + type);
         }
