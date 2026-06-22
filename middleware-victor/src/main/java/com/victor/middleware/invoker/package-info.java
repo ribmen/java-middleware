@@ -1,5 +1,5 @@
 /**
- * In-process message router.
+ * In-process message router and interceptor chain.
  *
  * <p>{@link com.victor.middleware.invoker.Dispatcher} is the seed of
  * the future annotation-driven invoker. Today it is an
@@ -17,5 +17,20 @@
  *         wire-form error shape — a thrown {@code RuntimeException}
  *         never becomes a silent connection drop.</li>
  * </ul>
+ *
+ * <h2>Interceptor chain (Phase 5A)</h2>
+ *
+ * <p>Cross-cutting concerns can be wrapped around a {@code Dispatcher}
+ * via {@link com.victor.middleware.invoker.InterceptingDispatcher}.
+ * Each invocation runs through an ordered list of
+ * {@link com.victor.middleware.invoker.InvocationInterceptor}s,
+ * sharing an immutable
+ * {@link com.victor.middleware.invoker.InvocationContext} (trace id,
+ * start time, command, args). Interceptors recurse via
+ * {@link com.victor.middleware.invoker.InvocationChain#proceed}; aborts
+ * signal themselves by throwing
+ * {@link com.victor.middleware.exceptions.InvocationAbortedException}.
+ * A built-in {@link com.victor.middleware.invoker.LoggingInterceptor}
+ * is provided for visibility during development.</p>
  */
 package com.victor.middleware.invoker;
