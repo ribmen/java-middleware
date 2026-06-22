@@ -10,6 +10,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.victor.middleware.factory.CommunicationFactory;
+import com.victor.middleware.protocol.CommunicationType;
+import com.victor.middleware.spi.ComponentClient;
+import com.victor.middleware.spi.ComponentServer;
+import com.victor.middleware.spi.RequestHandler;
+import com.victor.middleware.util.ComponentInfo;
+
 public class Gateway {
 
     private final int port;

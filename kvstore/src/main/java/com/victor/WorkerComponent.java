@@ -1,6 +1,10 @@
 package com.victor;
 
 import com.victor.business.KVStore;
+import com.victor.middleware.factory.CommunicationFactory;
+import com.victor.middleware.protocol.CommunicationType;
+import com.victor.middleware.spi.ComponentClient;
+import com.victor.middleware.spi.RequestHandler;
 
 public class WorkerComponent extends BaseComponent {
 

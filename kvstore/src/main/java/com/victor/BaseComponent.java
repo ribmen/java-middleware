@@ -5,6 +5,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.victor.middleware.factory.CommunicationFactory;
+import com.victor.middleware.protocol.CommunicationType;
+import com.victor.middleware.spi.ComponentClient;
+import com.victor.middleware.spi.ComponentServer;
+import com.victor.middleware.spi.RequestHandler;
+
 public abstract class BaseComponent {
 
     private static final String NODE_LABEL = "WORKER";

@@ -2,10 +2,10 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.victor</groupId>
-  <artifactId>kvstore</artifactId>
+  <artifactId>middleware</artifactId>
   <packaging>jar</packaging>
   <version>1.0-SNAPSHOT</version>
-  <name>kvstore</name>
+  <name>middleware</name>
   <url>http://maven.apache.org</url>
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
@@ -13,11 +13,6 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <dependencies>
-    <dependency>
-      <groupId>com.victor</groupId>
-      <artifactId>middleware</artifactId>
-      <version>1.0-SNAPSHOT</version>
-    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
