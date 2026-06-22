@@ -101,7 +101,7 @@ deferred (Phase 5).
 
 | Pattern | Evidence | Notes |
 |---|---|---|
-| Invocation Interceptor | `invoker/InvocationInterceptor` (`@FunctionalInterface` `String around(InvocationContext, InvocationChain)`) + `invoker/InterceptingDispatcher` (wraps `Dispatcher` with an ordered chain) + built-in `invoker/LoggingInterceptor`. Chain runs in pre-order via `InvocationChainImpl`; aborts signal via `InvocationAbortedException` (checked). 23 dedicated tests across `InvocationChainTest` (9), `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5). | ✅ |
+| Invocation Interceptor | `invoker/InvocationInterceptor` (`@FunctionalInterface` `String around(InvocationContext, InvocationChain)`) + `invoker/InterceptingDispatcher` (wraps `Dispatcher` with an ordered chain) + built-in `invoker/LoggingInterceptor`. Chain runs in pre-order via `InvocationChainImpl`; aborts signal via `InvocationAbortedException` (checked). 27 dedicated tests across `InvocationChainTest` (9), `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5), `InvocationContextTest` (4). | ✅ |
 | Invocation Context | `invoker/InvocationContext` — immutable value type carrying `traceId` (UUID), `command`, `args`, `startNanos`, derived `elapsedNanos`. Built once per `InterceptingDispatcher.dispatch` via `InvocationContext.forMessage` and shared across every interceptor in the chain. | ✅ |
 | Protocol Plug-In | `protocol/CommunicationType` enum (`TCP`, `HTTP`, `UDP`) + `factory/CommunicationFactory` swap implementations. **Two protocols supported**: HTTP and TCP (or HTTP and UDP, or TCP and UDP — pick any 2). Currently three are supported. | ✅ |
 
@@ -178,10 +178,10 @@ maior peso pendente).
 - **Invocation Context**: `invoker/InvocationContext` — immutable value
   type carrying `traceId` (UUID), `command`, `args`, `startNanos`,
   derived `elapsedNanos`; shared across every interceptor in one chain.
-- **Test coverage**: 23 dedicated tests across `InvocationChainTest` (9),
-  `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5). Total
-  `middleware-victor` suite now 62/62 green; `kvstore` suite unchanged
-  (1/1).
+- **Test coverage**: 27 dedicated tests across `InvocationChainTest` (9),
+  `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5),
+  `InvocationContextTest` (4). Total `middleware-victor` suite now
+  62/62 green; `kvstore` suite unchanged (1/1).
 - **Documentation**: `invoker/package-info.java` extended with an
   "Interceptor chain (Phase 5A)" section that names the two contracts pinned
   by tests and points future readers at each new class.
