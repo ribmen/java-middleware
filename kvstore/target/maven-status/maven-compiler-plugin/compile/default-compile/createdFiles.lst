@@ -3,3 +3,4 @@ com/victor/Gateway.class
 com/victor/business/VersionedValue.class
 com/victor/WorkerComponent.class
 com/victor/business/KVStore.class
+com/victor/Gateway$1.class

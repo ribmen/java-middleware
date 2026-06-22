@@ -28,17 +28,37 @@ public abstract class BaseComponent {
     private static final int MAX_HEARTBEAT_RETRIES = 2;
 
 
+    /**
+     * Production constructor: looks up the client and server from
+     * {@link CommunicationFactory}. Kept for the production call sites
+     * ({@link WorkerComponent} etc.) that don't care about wiring.
+     */
     public BaseComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type) {
+        this(componentPort, gatewayHost, gatewayPort, type,
+             CommunicationFactory.createClient(type),
+             CommunicationFactory.createServer(type));
+    }
+
+    /**
+     * Test-seam constructor: accepts pre-built client + server. Allows
+     * tests to substitute in-memory doubles without touching the static
+     * factory.
+     */
+    BaseComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type,
+                  ComponentClient client, ComponentServer server) {
         this.componentPort = componentPort;
         this.gatewayHost = gatewayHost;
         this.gatewayPort = gatewayPort;
         this.type = type;
-        this.clientToGateway = CommunicationFactory.createClient(type);
+        this.clientToGateway = client;
+        this.server = server;
     }
 
     public void start() throws Exception {
 
-        server = CommunicationFactory.createServer(type);
+        if (server == null) {
+            server = CommunicationFactory.createServer(type);
+        }
         server.start(componentPort , getRequestHandler());
 
         System.out.printf("[%s] Servidor iniciado na porta %d\n", NODE_LABEL, componentPort);

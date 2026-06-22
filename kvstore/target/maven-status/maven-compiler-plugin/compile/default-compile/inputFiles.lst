@@ -1,4 +1,6 @@
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/package-info.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/BaseComponent.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/business/package-info.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/business/KVStore.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/business/VersionedValue.java
 /home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/kvstore/src/main/java/com/victor/WorkerComponent.java

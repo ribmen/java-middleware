@@ -1,0 +1,6 @@
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/client/UdpClientTest.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/server/HttpServerTest.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/invoker/DispatcherTest.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/client/HttpClientTest.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/client/TcpClientTest.java
+/home/victor/Documentos/Faculdade/9 SEMESTRE/DISTRIBUIDA/meu-middleware/middleware-victor/src/test/java/com/victor/middleware/protocol/MessageParserTest.java

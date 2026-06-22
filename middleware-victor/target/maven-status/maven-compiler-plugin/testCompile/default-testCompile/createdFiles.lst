@@ -1,0 +1,7 @@
+com/victor/middleware/client/HttpClientTest$CapturedRequest.class
+com/victor/middleware/client/HttpClientTest.class
+com/victor/middleware/protocol/MessageParserTest.class
+com/victor/middleware/invoker/DispatcherTest.class
+com/victor/middleware/client/TcpClientTest.class
+com/victor/middleware/client/UdpClientTest.class
+com/victor/middleware/server/HttpServerTest.class

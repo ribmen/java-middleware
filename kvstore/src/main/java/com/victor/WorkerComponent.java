@@ -1,22 +1,18 @@
 package com.victor;
 
 import com.victor.business.KVStore;
-import com.victor.middleware.factory.CommunicationFactory;
 import com.victor.middleware.protocol.CommunicationType;
-import com.victor.middleware.spi.ComponentClient;
 import com.victor.middleware.spi.RequestHandler;
 
 public class WorkerComponent extends BaseComponent {
 
-    private final ComponentClient clientToGateway;
-    private KVStore kvStore;
-    
+    private final KVStore kvStore;
+
     public WorkerComponent(int componentPort, String gatewayHost, int gatewayPort, CommunicationType type) {
 
         super(componentPort, gatewayHost, gatewayPort, type);
 
         this.kvStore = new KVStore(new java.util.HashMap<>());
-        this.clientToGateway = CommunicationFactory.createClient(type);
     }
 
     @Override
