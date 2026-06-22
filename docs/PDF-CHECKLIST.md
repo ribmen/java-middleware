@@ -1,7 +1,7 @@
 # PDF Checklist — `Descrição do Segundo Trabalho Prático`
 
 Mapping each PDF requirement to the concrete file/line evidence in the repo.
-Last refreshed: 2026-06-22, after Phase 4.
+Last refreshed: 2026-06-22, after Phase 5A (Invocation Interceptor + Context).
 
 ---
 
@@ -101,8 +101,8 @@ deferred (Phase 5).
 
 | Pattern | Evidence | Notes |
 |---|---|---|
-| Invocation Interceptor | **Not implemented.** Plan §6.3 mentions a `Dispatcher` seed; current dispatcher does not yet expose an interceptor chain. Phase 5 candidate. | Worth 3.0 in the grading rubric — high impact. |
-| Invocation Context | `Message` record carries `(Command command, List<String> args)` — minimal context for the duration of one invocation. A richer `InvocationContext` (caller id, timestamp, trace id) is Phase 5. | |
+| Invocation Interceptor | `invoker/InvocationInterceptor` (`@FunctionalInterface` `String around(InvocationContext, InvocationChain)`) + `invoker/InterceptingDispatcher` (wraps `Dispatcher` with an ordered chain) + built-in `invoker/LoggingInterceptor`. Chain runs in pre-order via `InvocationChainImpl`; aborts signal via `InvocationAbortedException` (checked). 23 dedicated tests across `InvocationChainTest` (9), `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5). | ✅ |
+| Invocation Context | `invoker/InvocationContext` — immutable value type carrying `traceId` (UUID), `command`, `args`, `startNanos`, derived `elapsedNanos`. Built once per `InterceptingDispatcher.dispatch` via `InvocationContext.forMessage` and shared across every interceptor in the chain. | ✅ |
 | Protocol Plug-In | `protocol/CommunicationType` enum (`TCP`, `HTTP`, `UDP`) + `factory/CommunicationFactory` swap implementations. **Two protocols supported**: HTTP and TCP (or HTTP and UDP, or TCP and UDP — pick any 2). Currently three are supported. | ✅ |
 
 ---
@@ -149,15 +149,45 @@ Output target: a `docs/capacity.md` with two plots or CSV tables.
 | Basic Remoting Patterns | 2.0 | 4/5 (Server Request Handler ✅, Invoker ✅, Remote Object ✅, Remoting Error ✅) | Marshaller pendente |
 | Identification Patterns | 1.0 | 3/3 ✅ | — |
 | Lifecycle Management | 2.0 | 4/8 (Static ✅, Per-Request ✅, Pooling ✅, Leasing ✅) | Client-Dependent Instance + Passivation pendentes |
-| Extension Patterns | 3.0 | 1/3 (Protocol Plug-In ✅) | Invocation Interceptor + Invocation Context pendentes |
+| Extension Patterns | 3.0 | 3/3 (Invocation Interceptor ✅, Invocation Context ✅, Protocol Plug-In ✅) | — |
 | Testes JMeter | req. #4 | Não iniciado | — |
 | Knee/Usable Capacity | req. #5 | Não iniciado | depende de JMeter |
 
-**Para nota máxima**: faltam Marshaller, Invocation Interceptor, Invocation
-Context, JMeter + capacity. Estimativa de cobertura atual: ~6.0 / 10.0 na
-rubrica individual.
+**Para nota máxima**: faltam Marshaller, Client-Dependent Instance, Passivation,
+JMeter + capacity. Estimativa de cobertura atual: ~6.5 / 10.0 na rubrica
+individual (Extension Patterns agora 3/3; Marshaller segue como o item de
+maior peso pendente).
 
 ---
+
+## Done (Phase 5A)
+
+- **Invocation Interceptor** SPI + chain: `invoker/InvocationInterceptor`
+  (`@FunctionalInterface`), `invoker/InvocationChain` + package-private
+  `InvocationChainImpl` (pre-order recursion via `index`-cursor +
+  `List.copyOf` snapshot), `invoker/InterceptingDispatcher` (wraps any
+  `Dispatcher` while preserving the `String dispatch(Message)` contract).
+- **Abort signal**: `exceptions/InvocationAbortedException` — checked, extends
+  `MiddlewareException` with `origin="INVOKER"`; intercept signal abort by
+  throwing it; `InterceptingDispatcher` translates to wire-form
+  `"ERRO: <message>"` so the response is always a well-formed `Message` on
+  the wire.
+- **Built-in interceptor**: `invoker/LoggingInterceptor` prints paired IN/OUT
+  lines keyed by `traceId` so log aggregators can correlate an IN with its
+  OUT/ABORT.
+- **Invocation Context**: `invoker/InvocationContext` — immutable value
+  type carrying `traceId` (UUID), `command`, `args`, `startNanos`,
+  derived `elapsedNanos`; shared across every interceptor in one chain.
+- **Test coverage**: 23 dedicated tests across `InvocationChainTest` (9),
+  `InterceptingDispatcherTest` (9), `LoggingInterceptorTest` (5). Total
+  `middleware-victor` suite now 62/62 green; `kvstore` suite unchanged
+  (1/1).
+- **Documentation**: `invoker/package-info.java` extended with an
+  "Interceptor chain (Phase 5A)" section that names the two contracts pinned
+  by tests and points future readers at each new class.
+- **Untouched on purpose**: `Dispatcher.java` (Phase 1 design is sealed —
+  the wrapper adds the chain, doesn't reshape the dispatcher) and
+  `kvstore/` (no domain change).
 
 ## Done (Phase 4)
 
