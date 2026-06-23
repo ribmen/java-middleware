@@ -1,7 +1,7 @@
 # PDF Checklist — `Descrição do Segundo Trabalho Prático`
 
 Mapping each PDF requirement to the concrete file/line evidence in the repo.
-Last refreshed: 2026-06-22, after Phase 5A (Invocation Interceptor + Context).
+Last refreshed: 2026-06-22, after Phase 5B (Marshaller Basic Remoting Pattern).
 
 ---
 
@@ -68,7 +68,7 @@ deferred (Phase 5).
 |---|---|
 | Server Request Handler | `spi/RequestHandler` — `@FunctionalInterface String handle(String)`. |
 | Invoker | `invoker/Dispatcher.java` — central dispatch table keyed by `Command`. 6 unit tests. |
-| Marshaller | **Not implemented.** Wire format is plain UTF-8 strings, pipe-delimited. Plan §7 records the decision to defer; user explicitly redirected "proceed to Phase 4" when offered to build it. Phase 5 candidate. |
+| Marshaller | `marshaller/JsonMarshaller` — Jackson-backed codec producing the envelope `{"verb":"…","args":[…],"body":{}}`. Wired in as the decorator layer via `MarshalledServer` / `MarshalledClient`. Error path uses `MarshalException` (statusCode 400/500). The pipe codec in `MessageParser` stays in production as the Layer-1 transport codec; both codecs round-trip the same `Message(Command, args)` value type. | ✅ |
 | Remote Object | `kvstore/business/KVStore.java` — the actual remote object, invoked through `WorkerComponent.getRequestHandler`. |
 | Remoting Error | `exceptions/MiddlewareException` + `ConnectionException` + `ProtocolException` + `NoAvailableNodeException`. Each carries an `origin` tag (`"HTTP"` / `"TCP"` / `"UDP"` / `"PARSER"`) for caller diagnostics. |
 
@@ -146,17 +146,16 @@ Output target: a `docs/capacity.md` with two plots or CSV tables.
 | Critério | Peso | Implementação | Lacuna |
 |---|---|---|---|
 | Modelo de Componentes | 2.0 | Básico (Command enum + Message record) | Falta modelo com `@Param` / assinatura preservada |
-| Basic Remoting Patterns | 2.0 | 4/5 (Server Request Handler ✅, Invoker ✅, Remote Object ✅, Remoting Error ✅) | Marshaller pendente |
+| Basic Remoting Patterns | 2.0 | 5/5 ✅ (Server Request Handler, Invoker, Marshaller, Remote Object, Remoting Error) | — |
 | Identification Patterns | 1.0 | 3/3 ✅ | — |
 | Lifecycle Management | 2.0 | 4/8 (Static ✅, Per-Request ✅, Pooling ✅, Leasing ✅) | Client-Dependent Instance + Passivation pendentes |
 | Extension Patterns | 3.0 | 3/3 (Invocation Interceptor ✅, Invocation Context ✅, Protocol Plug-In ✅) | — |
 | Testes JMeter | req. #4 | Não iniciado | — |
 | Knee/Usable Capacity | req. #5 | Não iniciado | depende de JMeter |
 
-**Para nota máxima**: faltam Marshaller, Client-Dependent Instance, Passivation,
-JMeter + capacity. Estimativa de cobertura atual: ~6.5 / 10.0 na rubrica
-individual (Extension Patterns agora 3/3; Marshaller segue como o item de
-maior peso pendente).
+**Para nota máxima**: faltam Client-Dependent Instance, Passivation,
+JMeter + capacity. Estimativa de cobertura atual: ~7.5 / 10.0 na rubrica
+individual (Extension Patterns 3/3; Basic Remoting Patterns agora 5/5).
 
 ---
 
@@ -188,6 +187,21 @@ maior peso pendente).
 - **Untouched on purpose**: `Dispatcher.java` (Phase 1 design is sealed —
   the wrapper adds the chain, doesn't reshape the dispatcher) and
   `kvstore/` (no domain change).
+
+## Done (Phase 5B)
+
+- **Marshaller SPI**: `spi/Marshaller` — protocol-agnostic `marshal(Message)` / `unmarshal(String)` contract.
+- **JSON implementation**: `marshaller/JsonMarshaller` + `marshaller/MarshallerFactory.json()` singleton. Defensive: empty/null input → `Message(UNKNOWN, [])`; malformed JSON / missing verb → `MarshalException(400)`; encoder failures → `MarshalException(500)`.
+- **Envelope DTO**: package-private `marshaller/MessageEnvelope` — Jackson-friendly `{verb, args, body}` record.
+- **Exception**: `exceptions/MarshalException` — extends `MiddlewareException`, carries `int statusCode` (400/500), `origin = "MARSHALLER"`.
+- **Typed SPI**: `spi/TypedRequestHandler` — `Message handle(Message) throws MiddlewareException`. Legacy `spi/RequestHandler` is now `@Deprecated` with a Javadoc pointer.
+- **Server decorator**: `marshaller/MarshalledServer` — wraps any `ComponentServer`, JSON-unmarshals requests, JSON-marshals responses, catches `MarshalException` and writes `{"error":"…","code":N}` envelopes.
+- **Client decorator**: `marshaller/MarshalledClient` — wraps any `ComponentClient`, JSON-marshals outgoing, JSON-unmarshals incoming; catches `MarshalException` on response and returns `Message(UNKNOWN, [err])`.
+- **Dispatcher typed entry**: `invoker/Dispatcher.dispatchTyped(Message)` — typed counterpart to `dispatch(Message)` so the Marshaller path skips a parse/encode round trip.
+- **HTTP seam**: `server/HttpServer.statusFrom(MiddlewareException)` — maps `MarshalException` to its `statusCode`; non-marshal exceptions return -1 (fallback to existing `resolveStatusCode`).
+- **Test coverage**: 32 dedicated tests across `MarshalExceptionTest` (3), `MessageEnvelopeTest` (1), `MarshallerSpiTest` (1), `JsonMarshallerTest` (12), `MarshallerFactoryTest` (2), `TypedRequestHandlerTest` (4), `MarshalledServerTest` (5), `MarshalledClientTest` (4), `DispatcherTest` (+1 dispatchTyped), `HttpServerTest` (+2 statusFrom). Total `middleware-victor` suite now 97/97 green; `kvstore` suite now 2/2 green (original pipe-codec test + `marshallerDecoratorRoundTripsOnTcpTransport`).
+- **Preservation invariant**: the 64 prior `middleware-victor` tests stay untouched (62 closed at end of Phase 5A + 2 `HttpServerTest.statusFrom` cases added in Phase 5B Task 11). The Marshaller decorator is exercised by its own dedicated test; production semantics of `MessageParser` and `Dispatcher` are unchanged.
+- **Documentation**: `marshaller/package-info.java` describes the decorator architecture; `invoker/package-info.java` extended with a "Marshaller decorator (Phase 5B)" section.
 
 ## Done (Phase 4)
 
