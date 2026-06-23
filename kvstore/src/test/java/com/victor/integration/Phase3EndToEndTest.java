@@ -1,9 +1,11 @@
 package com.victor.integration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.ServerSocket;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,7 +14,14 @@ import org.junit.jupiter.api.Test;
 import com.victor.Gateway;
 import com.victor.WorkerComponent;
 import com.victor.middleware.client.TcpClient;
+import com.victor.middleware.factory.CommunicationFactory;
+import com.victor.middleware.marshaller.MarshalledClient;
+import com.victor.middleware.marshaller.MarshalledServer;
+import com.victor.middleware.marshaller.MarshallerFactory;
+import com.victor.middleware.protocol.Command;
 import com.victor.middleware.protocol.CommunicationType;
+import com.victor.middleware.protocol.Message;
+import com.victor.middleware.protocol.MessageParser;
 
 /**
  * In-process end-to-end test for Phase 3 of the
@@ -65,6 +74,7 @@ class Phase3EndToEndTest {
     private TcpClient client;
     private int gatewayPort;
     private int workerPort;
+    private int serverPort;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -75,6 +85,7 @@ class Phase3EndToEndTest {
         gateway = new Gateway(gatewayPort, CommunicationType.TCP);
         worker  = new WorkerComponent(workerPort, "127.0.0.1", gatewayPort, CommunicationType.TCP);
         client  = new TcpClient();
+        serverPort = pickFreePort();
 
         gateway.start();
         // Worker.start() performs the synchronous REGISTER handshake against
@@ -122,6 +133,40 @@ class Phase3EndToEndTest {
                 "READ after 3 overwrites should return the last value, got: " + overwriteRead);
         assertFalse(overwriteRead.contains("v1"),
                 "READ after overwrite should NOT return a stale value, got: " + overwriteRead);
+    }
+
+    /**
+     * Phase 5B boundary test: exercise the {@link MarshalledServer} /
+     * {@link MarshalledClient} decorator layer end-to-end on a real TCP
+     * transport — without going through the kvstore gateway. This
+     * proves the JSON envelope path composes with the existing
+     * {@code TcpServer}/{@code TcpClient} stack independently of the
+     * gateway's pipe codec. The existing
+     * {@link #writeReadAndOverwriteEndToEnd()} keeps the pipe codec
+     * contract on the production path.
+     */
+    @Test
+    void marshallerDecoratorRoundTripsOnTcpTransport() throws Exception {
+        // Bring up a MarshalledServer over a raw TcpServer with a
+        // tiny handler, and a MarshalledClient over a TcpClient.
+        MarshalledServer marshalledServer = new MarshalledServer(
+                CommunicationFactory.createServer(CommunicationType.TCP),
+                MarshallerFactory.json());
+        marshalledServer.start(serverPort, req -> {
+            Message m = MessageParser.parse(req);
+            return new Message(Command.OK, m.args()).toWireForm();
+        });
+
+        MarshalledClient marshalledClient = new MarshalledClient(
+                CommunicationFactory.createClient(CommunicationType.TCP),
+                MarshallerFactory.json());
+
+        Message resp = marshalledClient.send("127.0.0.1", serverPort,
+                new Message(Command.WRITE, List.of("alpha", "beta")));
+        assertEquals(Command.OK, resp.command());
+        assertEquals(List.of("alpha", "beta"), resp.args());
+
+        marshalledServer.stop();
     }
 
     /** Helpers ---------------------------------------------------------------- */
