@@ -15,6 +15,7 @@ public enum Command {
     READ,
     REGISTER,
     HEARTBEAT,
+    OK,
     UNKNOWN;
 
     /**
