@@ -32,5 +32,17 @@
  * {@link com.victor.middleware.exceptions.InvocationAbortedException}.
  * A built-in {@link com.victor.middleware.invoker.LoggingInterceptor}
  * is provided for visibility during development.</p>
+ *
+ * <h2>Marshaller decorator (Phase 5B)</h2>
+ *
+ * <p>When the dispatcher is reached through a
+ * {@link com.victor.middleware.marshaller.MarshalledServer}, requests
+ * arrive as JSON envelopes and leave as JSON envelopes. Inside that
+ * envelope, the wire form is still the same pipe-delimited
+ * {@code Message} that the dispatcher expects. The Marshaller
+ * decorator is the only layer that knows about JSON; the dispatcher
+ * itself is JSON-agnostic. Use
+ * {@link com.victor.middleware.invoker.Dispatcher#dispatchTyped} from
+ * the Marshaller path to skip a parse/encode round trip.</p>
  */
 package com.victor.middleware.invoker;
