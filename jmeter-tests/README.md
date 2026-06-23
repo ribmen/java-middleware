@@ -22,10 +22,10 @@ Escreve um valor na chave especificada.
 ```
 POST /WRITE HTTP/1.1
 Host: localhost:8000
-Content-Type: text/plain
-Content-Length: 17
+Content-Type: application/json
+Content-Length: 44
 
-key1|value_test
+{"verb":"WRITE","args":["key1","value_test"],"body":{}}
 ```
 
 **Resposta esperada:** Confirmação de escrita ou erro

@@ -27,7 +27,7 @@
           <stringProp name="TCPSampler.port">8000</stringProp>
           <boolProp name="TCPSampler.nodelay">false</boolProp>
           <stringProp name="TCPSampler.timeout">10000</stringProp>
-          <stringProp name="TCPSampler.request">WRITE|Chave1|Value1</stringProp>
+          <stringProp name="TCPSampler.request">{"verb":"WRITE","args":["Chave1","Value1"],"body":{}}</stringProp>
           <stringProp name="TCPSampler.EolByte">10</stringProp>
           <stringProp name="ConfigTestElement.username"></stringProp>
           <stringProp name="ConfigTestElement.password"></stringProp>
@@ -260,7 +260,7 @@
           <stringProp name="TCPSampler.port">8000</stringProp>
           <boolProp name="TCPSampler.nodelay">false</boolProp>
           <stringProp name="TCPSampler.timeout">10000</stringProp>
-          <stringProp name="TCPSampler.request">WRITE|Chave1|Value1</stringProp>
+          <stringProp name="TCPSampler.request">{"verb":"WRITE","args":["Chave1","Value1"],"body":{}}</stringProp>
           <stringProp name="TCPSampler.EolByte">10</stringProp>
           <stringProp name="ConfigTestElement.username"></stringProp>
           <stringProp name="ConfigTestElement.password"></stringProp>

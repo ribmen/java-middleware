@@ -211,7 +211,7 @@ jmeter -t kvstore_load_test.jmx
 |------|-----------|--------------|----------|
 | `/REGISTER` | Registrar componente | `127.0.0.1\|8001` | `SUCESSO` |
 | `/HEARTBEAT` | Verificar vitalidade | `127.0.0.1\|8001` | `OK` |
-| `/WRITE` | Escrever chave-valor | `key\|value` | confirmação |
+| `/WRITE` | Escrever chave-valor | `{"verb":"WRITE","args":["key","value"],"body":{}}` | confirmação |
 | `/READ` | Ler valor de chave | `key` | valor ou `NOT_FOUND` |
 
 ---
