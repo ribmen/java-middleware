@@ -129,6 +129,20 @@ class HttpServerTest {
                 "expected 500 for empty handler payload, got: " + firstLine(raw));
     }
 
+    @Test
+    void marshalException400MapsToHttp400() {
+        com.victor.middleware.exceptions.MarshalException ex =
+                new com.victor.middleware.exceptions.MarshalException("bad json", 400);
+        assertEquals(400, server.statusFrom(ex));
+    }
+
+    @Test
+    void marshalException500MapsToHttp500() {
+        com.victor.middleware.exceptions.MarshalException ex =
+                new com.victor.middleware.exceptions.MarshalException("encoder boom", 500);
+        assertEquals(500, server.statusFrom(ex));
+    }
+
     // -- helpers ---------------------------------------------------------------
 
     private HttpServer newServer(String constantResponse) throws Exception {

@@ -185,6 +185,21 @@ public class HttpServer implements ComponentServer {
         return 200;
     }
 
+    /**
+     * Translate a {@link com.victor.middleware.exceptions.MarshalException}
+     * to its HTTP status code. Package-private so MarshalledServer's
+     * future integration with HttpServer has a single seam to call.
+     *
+     * <p>Non-marshal {@link MiddlewareException}s return -1 to signal
+     * "fall back to the existing resolveStatusCode logic".</p>
+     */
+    int statusFrom(com.victor.middleware.exceptions.MiddlewareException e) {
+        if (e instanceof com.victor.middleware.exceptions.MarshalException me) {
+            return me.statusCode();
+        }
+        return -1;
+    }
+
     private void sendErrorResponse(OutputStream out, int statusCode, String message) throws IOException {
         String statusText = statusCode == 400 ? "Bad Request" : "Internal Server Error";
         String body = statusCode + " " + statusText + ": " + message;
