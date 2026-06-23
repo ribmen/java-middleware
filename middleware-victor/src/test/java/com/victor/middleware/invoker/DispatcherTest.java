@@ -77,4 +77,22 @@ class DispatcherTest {
         d.register(Command.WRITE, msg -> "second");
         assertEquals("second", d.dispatch(new Message(Command.WRITE, List.of())));
     }
+
+    /**
+     * dispatchTyped(Message) routes through the same handler map and
+     * re-parses the wire-form output back into a {@link Message}. For
+     * well-formed wire-form responses (verb-prefixed), the round-trip
+     * preserves the verb and args.
+     */
+    @Test
+    void dispatchTypedRoundTripsWellFormedWireResponse() {
+        Dispatcher d = new Dispatcher();
+        // Handler returns a well-formed pipe-delimited wire-form response.
+        d.register(Command.WRITE, msg -> "OK|" + msg.args().get(0));
+
+        Message msg = new Message(Command.WRITE, List.of("key", "value"));
+        Message typed = d.dispatchTyped(msg);
+        assertEquals(Command.OK, typed.command());
+        assertEquals(List.of("key"), typed.args());
+    }
 }

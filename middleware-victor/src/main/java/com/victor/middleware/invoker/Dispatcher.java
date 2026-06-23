@@ -5,6 +5,7 @@ import java.util.function.Function;
 
 import com.victor.middleware.protocol.Command;
 import com.victor.middleware.protocol.Message;
+import com.victor.middleware.protocol.MessageParser;
 
 /**
  * Minimal in-process dispatcher: maps each {@link Command} to a handler
@@ -62,5 +63,19 @@ public class Dispatcher {
         } catch (RuntimeException e) {
             return "ERRO: Handler lançou " + e.getClass().getSimpleName() + ": " + e.getMessage();
         }
+    }
+
+    /**
+     * Typed counterpart to {@link #dispatch(Message)}. Returns a
+     * {@link Message} directly instead of a wire-form string, so the
+     * Marshaller decorator doesn't pay a parse/encode round trip.
+     *
+     * <p>The error-path behavior mirrors {@code dispatch}: the same
+     * {@code "ERRO:"} payload is parsed back into a {@link Message}
+     * for callers that want a uniform typed surface.</p>
+     */
+    public Message dispatchTyped(Message msg) {
+        String wire = dispatch(msg);
+        return MessageParser.parse(wire);
     }
 }
