@@ -66,6 +66,10 @@ final class AnnotationScanner {
     }
 
     private static BoundMethod buildBoundMethod(Object handler, Method method) {
+        // Note: Class.getMethods() (used above) only returns public methods, so
+        // this non-public check is dead code under the current entry point. It
+        // stays as defensive coverage in case a future refactor switches to
+        // getDeclaredMethods() — see AnnotationScannerTest#nonPublicMethodIsFilteredByGetMethods.
         if (!java.lang.reflect.Modifier.isPublic(method.getModifiers())) {
             throw new IllegalArgumentException(
                     "@MethodMapping method must be public: " + method);
