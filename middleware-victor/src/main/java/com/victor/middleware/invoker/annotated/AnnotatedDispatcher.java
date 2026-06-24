@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import com.victor.middleware.exceptions.MarshalException;
 import com.victor.middleware.protocol.Command;
 import com.victor.middleware.protocol.Message;
 import com.victor.middleware.spi.Marshaller;
@@ -28,14 +29,12 @@ public final class AnnotatedDispatcher {
     private final Map<Command, BoundMethod> bindings = new EnumMap<>(Command.class);
 
     /**
-     * Held for forward-compatibility with a future response-encode path
-     * (see spec §2 "Marshaller is injected into AnnotatedDispatcher").
-     * The current {@link #dispatchTyped} returns a typed {@link Message}
-     * directly; the {@link MarshalledServer} side is what does the
-     * marshalling. Removing the field now would break the documented
-     * constructor contract for callers wiring up the typed path.
+     * Used on the success path to confirm the response {@link Message}
+     * can be encoded to the wire form. The marshaller is held per spec
+     * §2 ("Marshaller is injected into AnnotatedDispatcher") and §5
+     * ("Marshaller throws MarshalException serializing the return
+     * value" surfaces as a {@code "MARSHALLER"}-origin error).
      */
-    @SuppressWarnings("unused")
     private final Marshaller marshaller;
 
     /** Wire up a dispatcher with a {@link Marshaller} for response encoding. */
@@ -98,12 +97,15 @@ public final class AnnotatedDispatcher {
             }
             Object result = bound.method().invoke(bound.target(), args);
             String stringified = String.valueOf(result);
+            Message response = new Message(Command.OK, List.of(stringified));
             try {
-                // We do not need to re-marshal a Message here — the caller
-                // is the typed path; we return the Message directly.
-                return new Message(Command.OK, List.of(stringified));
-            } catch (RuntimeException e) {
-                return errorMessage("MARSHALLER", e.getMessage());
+                // Validate the response can be encoded to the wire form.
+                // The typed return type still wins — this is a side-effecting
+                // canary that surfaces a MARSHALLER-origin error early.
+                marshaller.marshal(response);
+                return response;
+            } catch (MarshalException me) {
+                return errorMessage("MARSHALLER", me.getMessage());
             }
         } catch (java.lang.reflect.InvocationTargetException ite) {
             Throwable cause = ite.getCause();
