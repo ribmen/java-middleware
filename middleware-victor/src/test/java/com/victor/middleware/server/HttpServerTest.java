@@ -16,14 +16,12 @@ import org.junit.jupiter.api.Test;
 import com.victor.middleware.spi.RequestHandler;
 
 /**
- * Pins the {@link HttpServer} request-line parsing contract.
+ * Pins the {@link HttpServer} HTTP/1.1 framing contract.
  *
- * <p>The contract has four pieces:</p>
+ * <p>The contract has three pieces after the pipe codec removal:</p>
  * <ol>
- *     <li>The server extracts the command from the URI path (e.g. {@code POST /WRITE}
- *         → command {@code WRITE}).</li>
- *     <li>The server reads the body up to {@code Content-Length} and concatenates
- *         {@code command + "|" + payload} for the handler.</li>
+ *     <li>The server reads the body up to {@code Content-Length} and forwards
+ *         those bytes verbatim to the handler — codec-agnostic transport.</li>
  *     <li>The handler's response is written back with a valid
  *         {@code HTTP/1.1 200 OK} envelope.</li>
  *     <li>The {@code resolveStatusCode} layering-violation is pinned: when the
@@ -31,6 +29,11 @@ import com.victor.middleware.spi.RequestHandler;
  *         server returns {@code 503}. Plan §7.5 flags this for Phase 5 cleanup;
  *         we pin it here so the future fix has a failing test.</li>
  * </ol>
+ *
+ * <p>Note: there is no longer a path-token command extraction. The verb
+ * travels inside the JSON envelope (the body), and the
+ * {@code MarshalledServer} decorator is responsible for decoding the
+ * envelope into a typed {@code Message}.</p>
  */
 class HttpServerTest {
 
@@ -58,7 +61,7 @@ class HttpServerTest {
         // silently consumes body bytes via read-ahead, so it can't currently
         // round-trip the payload end-to-end. That fix is tracked separately
         // (see plan §7.5 followups); here we pin only what works — the
-        // request-line command extraction and the response envelope shape.
+        // response envelope shape.
         String raw = sendRaw("POST /WRITE HTTP/1.1\r\n" +
                              "Content-Length: 3\r\n" +
                              "\r\n" +
@@ -75,9 +78,13 @@ class HttpServerTest {
                 "expected one body chunk after blank-line delimiter, got: " + raw);
     }
 
-    /** GET with no Content-Length still works — body is empty, handler sees "COMMAND|". */
+    /**
+     * GET with no Content-Length still works — body is empty, handler
+     * sees {@code ""}. The server forwards the raw body bytes; there
+     * is no longer any pipe-prefix synthesis.
+     */
     @Test
-    void getWithoutBodySendsCommandOnlyToHandler() throws Exception {
+    void getWithoutBodyForwardsEmptyStringToHandler() throws Exception {
         AtomicReference<String> captured = new AtomicReference<>();
         // Replace the default server with one bound to a fresh port. Reusing
         // the previous port after stop() hits TCP TIME_WAIT and fails.
@@ -87,8 +94,8 @@ class HttpServerTest {
 
         sendRaw("GET /PING HTTP/1.1\r\n\r\n");
 
-        assertEquals("PING|", captured.get(),
-                "GET with no body should yield canonical 'COMMAND|' with empty payload");
+        assertEquals("", captured.get(),
+                "GET with no body should forward an empty payload to the handler");
     }
 
     /**

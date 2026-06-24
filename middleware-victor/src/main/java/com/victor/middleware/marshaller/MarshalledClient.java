@@ -12,6 +12,12 @@ import com.victor.middleware.spi.Marshaller;
  * outgoing {@link Message}s to JSON envelopes, then converts incoming JSON
  * envelopes back to {@link Message}s on the return path.
  *
+ * <p>The primary entry point is {@link #send(String, int, Message)}.
+ * The legacy {@link ComponentClient#send(String, int, String)} overload
+ * is preserved as a pass-through so callers that already hold a wire
+ * string (e.g. JMeter clients reusing a captured envelope) can still
+ * ship it without an intermediate marshal step.</p>
+ *
  * <p>Error path: a malformed response is converted to
  * {@code Message(UNKNOWN, [<error message>])} so callers see a uniform
  * typed surface — the same forgiveness shape that {@code Dispatcher}
@@ -47,9 +53,14 @@ public class MarshalledClient implements ComponentClient {
     }
 
     /**
-     * SPI pass-through: forwards the raw wire-form string to the inner
-     * client and returns its raw wire-form string response. Marshalling
-     * is the caller's responsibility on this path.
+     * SPI pass-through: forwards the wire-form string to the inner
+     * client and returns its raw response. Use this when the caller
+     * already holds a marshalled envelope (e.g. replaying a captured
+     * sample) and wants to skip the marshal round trip.
+     *
+     * <p><b>Note:</b> production code should prefer
+     * {@link #send(String, int, Message)} so the marshal step is
+     * explicit and uniformly typed.</p>
      */
     @Override
     public String send(String host, int port, String request) throws MiddlewareException {

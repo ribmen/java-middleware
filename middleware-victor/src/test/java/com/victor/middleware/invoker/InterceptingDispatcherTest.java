@@ -1,6 +1,7 @@
 package com.victor.middleware.invoker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,12 +17,12 @@ import com.victor.middleware.protocol.Message;
 
 class InterceptingDispatcherTest {
 
-    /** Build a Dispatcher pre-bound to a single WRITE handler that returns a fixed value. */
-    private static Dispatcher dispatcherStoringLastMessage(String returnValue, AtomicReference<Message> seen) {
+    /** Build a Dispatcher pre-bound to a single WRITE handler that returns a fixed typed value. */
+    private static Dispatcher dispatcherStoringLastMessage(Message response, AtomicReference<Message> seen) {
         Dispatcher d = new Dispatcher();
         d.register(Command.WRITE, msg -> {
             seen.set(msg);
-            return returnValue;
+            return response;
         });
         return d;
     }
@@ -29,97 +30,108 @@ class InterceptingDispatcherTest {
     @Test
     void passesThroughToInnerDispatcher() throws InvocationAbortedException {
         AtomicReference<Message> seen = new AtomicReference<>();
-        Dispatcher inner = dispatcherStoringLastMessage("wrote:k|v", seen);
+        Dispatcher inner = dispatcherStoringLastMessage(
+                new Message(Command.OK, List.of("wrote:k|v")), seen);
 
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of());
         Message msg = new Message(Command.WRITE, List.of("k", "v"));
-        String result = wrapper.dispatch(msg);
+        Message result = wrapper.dispatch(msg);
 
-        assertEquals("wrote:k|v", result);
+        assertEquals(new Message(Command.OK, List.of("wrote:k|v")), result);
         assertEquals(msg, seen.get(), "inner dispatcher must have been called");
     }
 
     @Test
     void invokesInterceptorsInOrder() throws InvocationAbortedException {
         Dispatcher inner = new Dispatcher();
-        inner.register(Command.READ, m -> "read:" + m.firstArg());
+        inner.register(Command.READ, m -> new Message(Command.OK, List.of("read:" + m.firstArg())));
         List<String> log = new ArrayList<>();
 
         InvocationInterceptor first = (c, ch) -> {
             log.add("first:pre");
-            String r = ch.proceed(c);
-            log.add("first:post:" + r);
+            Message r = ch.proceed(c);
+            log.add("first:post:" + r.command().wireForm() + "/" + r.args());
             return r;
         };
         InvocationInterceptor second = (c, ch) -> {
             log.add("second:pre");
-            String r = ch.proceed(c);
-            log.add("second:post:" + r);
+            Message r = ch.proceed(c);
+            log.add("second:post:" + r.command().wireForm() + "/" + r.args());
             return r;
         };
 
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of(first, second));
-        String result = wrapper.dispatch(new Message(Command.READ, List.of("k")));
+        Message result = wrapper.dispatch(new Message(Command.READ, List.of("k")));
 
-        assertEquals("read:k", result);
+        assertEquals(new Message(Command.OK, List.of("read:k")), result);
         assertEquals(
-                List.of("first:pre", "second:pre", "second:post:read:k", "first:post:read:k"),
+                List.of(
+                        "first:pre",
+                        "second:pre",
+                        "second:post:OK/[read:k]",
+                        "first:post:OK/[read:k]"),
                 log);
     }
 
     @Test
-    void abortedInvocationReturnsWireFormError() throws InvocationAbortedException {
+    void abortedInvocationReturnsTypedError() throws InvocationAbortedException {
         Dispatcher inner = new Dispatcher();
-        inner.register(Command.WRITE, m -> "should-not-happen");
+        inner.register(Command.WRITE, m -> new Message(Command.OK, List.of("should-not-happen")));
 
         InvocationInterceptor aborter = (c, ch) -> {
             throw new InvocationAbortedException("auth failed");
         };
 
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of(aborter));
-        String result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
+        Message result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
 
-        assertEquals("ERRO: auth failed", result);
+        assertSame(Command.UNKNOWN, result.command());
+        assertEquals(List.of("ERRO: auth failed"), result.args());
     }
 
     @Test
-    void runtimeExceptionInInterceptorSurfacedAsError() throws InvocationAbortedException {
+    void runtimeExceptionInInterceptorSurfacedAsTypedError() throws InvocationAbortedException {
         Dispatcher inner = new Dispatcher();
-        inner.register(Command.WRITE, m -> "should-not-happen");
+        inner.register(Command.WRITE, m -> new Message(Command.OK, List.of("should-not-happen")));
 
         InvocationInterceptor exploder = (c, ch) -> {
             throw new IllegalStateException("boom");
         };
 
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of(exploder));
-        String result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
+        Message result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
 
-        assertTrue(result.startsWith("ERRO:"),
-                "runtime exception must surface as a wire-form error, got: " + result);
-        assertTrue(result.contains("IllegalStateException"),
-                "error must name the exception type, got: " + result);
-        assertTrue(result.contains("boom"),
-                "error must include the exception message, got: " + result);
+        assertSame(Command.UNKNOWN, result.command());
+        String arg = result.args().get(0);
+        assertTrue(arg.startsWith("ERRO:"),
+                "runtime exception must surface as a typed error, got: " + arg);
+        assertTrue(arg.contains("IllegalStateException"),
+                "error must name the exception type, got: " + arg);
+        assertTrue(arg.contains("boom"),
+                "error must include the exception message, got: " + arg);
     }
 
     @Test
     void emptyInterceptorListBehavesLikeBareDispatcher() throws InvocationAbortedException {
         Dispatcher inner = new Dispatcher();
-        inner.register(Command.READ, m -> "read:" + m.firstArg());
+        inner.register(Command.READ, m -> new Message(Command.OK, List.of("read:" + m.firstArg())));
 
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of());
-        String result = wrapper.dispatch(new Message(Command.READ, List.of("foo")));
+        Message result = wrapper.dispatch(new Message(Command.READ, List.of("foo")));
 
-        assertEquals("read:foo", result);
+        assertEquals(new Message(Command.OK, List.of("read:foo")), result);
     }
 
     @Test
     void dispatcherPropagatesInnerUnknownCommandError() throws InvocationAbortedException {
-        // The wrapper should NOT swallow the inner dispatcher's wire-form error for unknown commands.
+        // The wrapper should NOT swallow the inner dispatcher's typed error for unknown commands.
         Dispatcher inner = new Dispatcher(); // no handlers
         InterceptingDispatcher wrapper = new InterceptingDispatcher(inner, List.of());
-        String result = wrapper.dispatch(new Message(Command.READ, List.of("foo")));
-        assertTrue(result.startsWith("ERRO:"), "got: " + result);
+        Message result = wrapper.dispatch(new Message(Command.READ, List.of("foo")));
+
+        assertSame(Command.UNKNOWN, result.command());
+        assertTrue(result.args().get(0).startsWith("ERRO:"),
+                "got: " + result.args());
     }
 
     @Test
@@ -138,11 +150,11 @@ class InterceptingDispatcherTest {
     @Test
     void constructorTakesImmutableSnapshotOfInterceptors() throws InvocationAbortedException {
         Dispatcher inner = new Dispatcher();
-        inner.register(Command.WRITE, m -> "ok");
+        inner.register(Command.WRITE, m -> new Message(Command.OK, List.of("ok")));
         List<InvocationInterceptor> source = new ArrayList<>();
         InvocationInterceptor a = (c, ch) -> {
             ch.proceed(c);
-            return "A";
+            return new Message(Command.OK, List.of("A"));
         };
         source.add(a);
 
@@ -150,10 +162,11 @@ class InterceptingDispatcherTest {
         // Mutate source after construction; the wrapper must keep its snapshot.
         source.add((c, ch) -> {
             ch.proceed(c);
-            return "B";
+            return new Message(Command.OK, List.of("B"));
         });
 
-        String result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
-        assertEquals("A", result, "wrapper must only invoke interceptors in its original snapshot");
+        Message result = wrapper.dispatch(new Message(Command.WRITE, List.of("k", "v")));
+        assertEquals(new Message(Command.OK, List.of("A")), result,
+                "wrapper must only invoke interceptors in its original snapshot");
     }
 }

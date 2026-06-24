@@ -1,7 +1,6 @@
 package com.victor.middleware.marshaller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -24,7 +23,7 @@ class MarshalledServerTest {
         AtomicReference<Message> captured = new AtomicReference<>();
         TypedRequestHandler typed = req -> {
             captured.set(req);
-            return new Message(Command.OK, List.of(req.args().get(0), "written"));
+            return new Message(Command.OK, List.of(req.firstArg(), "written"));
         };
         Marshaller marshaller = new JsonMarshaller();
 
@@ -34,7 +33,7 @@ class MarshalledServerTest {
         StubRawServer raw = new StubRawServer();
 
         MarshalledServer server = new MarshalledServer(raw, marshaller);
-        server.start(0, adaptTypedToString(typed));
+        server.startTyped(0, typed);
 
         String wireRequest = marshaller.marshal(
                 new Message(Command.WRITE, List.of("smoke-key", "smoke-value")));
@@ -53,7 +52,7 @@ class MarshalledServerTest {
         Marshaller marshaller = new JsonMarshaller();
         StubRawServer raw = new StubRawServer();
         MarshalledServer server = new MarshalledServer(raw, marshaller);
-        server.start(0, req -> "OK|never-called");
+        server.startTyped(0, req -> new Message(Command.OK, List.of("never-called")));
 
         String response = raw.lastHandled("{not valid json");
         assertTrue(response.contains("\"error\""),
@@ -63,21 +62,27 @@ class MarshalledServerTest {
         server.stop();
     }
 
+    /**
+     * A handler exception is caught by the decorator and converted into a
+     * typed-error JSON envelope. The client therefore always sees
+     * well-formed JSON, never a half-written response or a thrown
+     * {@link MiddlewareException} propagating out of the adapter.
+     */
     @Test
-    void handlerMiddlewareExceptionPropagatesUnchanged() throws Exception {
+    void handlerMiddlewareExceptionEnvelopedAsError() throws Exception {
         Marshaller marshaller = new JsonMarshaller();
         StubRawServer raw = new StubRawServer();
         MarshalledServer server = new MarshalledServer(raw, marshaller);
-        server.start(0, req -> {
+        server.startTyped(0, req -> {
             throw new com.victor.middleware.exceptions.ConnectionException("HTTP", "down");
         });
 
-        try {
-            raw.lastHandled(marshaller.marshal(new Message(Command.WRITE, List.of("k", "v"))));
-            org.junit.jupiter.api.Assertions.fail("expected ConnectionException to propagate");
-        } catch (com.victor.middleware.exceptions.ConnectionException expected) {
-            assertEquals("HTTP", expected.getOrigin());
-        }
+        String response = raw.lastHandled(
+                marshaller.marshal(new Message(Command.WRITE, List.of("k", "v"))));
+        assertTrue(response.contains("\"error\""),
+                "expected error envelope from caught exception, got: " + response);
+        assertTrue(response.contains("\"code\":500"),
+                "expected code 500 in envelope, got: " + response);
         server.stop();
     }
 
@@ -123,13 +128,5 @@ class MarshalledServerTest {
         String lastHandled(String wireRequest) throws MiddlewareException {
             return handler.handle(wireRequest);
         }
-    }
-
-    private static RequestHandler adaptTypedToString(TypedRequestHandler typed) {
-        return wire -> {
-            Message req = com.victor.middleware.protocol.MessageParser.parse(wire);
-            Message resp = typed.handle(req);
-            return resp.toWireForm();
-        };
     }
 }

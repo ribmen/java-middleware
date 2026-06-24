@@ -23,11 +23,15 @@ import com.victor.middleware.exceptions.ProtocolException;
  *
  * <p>The contract has two halves:</p>
  * <ol>
- *     <li>The request framing: a {@code POST /COMMAND HTTP/1.1} with
- *         args rejoined as the body.</li>
+ *     <li>The request framing: a {@code POST / HTTP/1.1} with the
+ *         JSON envelope sent verbatim as the body.</li>
  *     <li>The response parsing: status line discarded, Content-Length
  *         honored for the body.</li>
  * </ol>
+ *
+ * <p>After the pipe codec removal the client is codec-agnostic — it
+ * ships whatever bytes the caller hands it. The marshaller is the only
+ * layer that knows the envelope shape; this client is just transport.</p>
  */
 class HttpClientTest {
 
@@ -52,27 +56,31 @@ class HttpClientTest {
     }
 
     /**
-     * Request framing: {@code WRITE|k|v} must become
-     * {@code POST /WRITE HTTP/1.1} with body {@code k|v}. The first
-     * pipe-token becomes the URI; the rest rejoins with {@code |}.
+     * Request framing: a JSON envelope passed verbatim must reach the
+     * server with {@code POST / HTTP/1.1} framing and the body bytes
+     * unchanged. The verb travels in the JSON envelope, not the path.
      */
     @Test
-    void framesRequestAsPostCommandWithArgsAsBody() throws Exception {
+    void framesRequestAsPostWithJsonBody() throws Exception {
         java.util.concurrent.atomic.AtomicReference<String> wire = new java.util.concurrent.atomic.AtomicReference<>();
         serverThread = forkServer(req -> {
             wire.set(req.wireAsString());
             return cannedResponse("Written");
         });
 
-        new HttpClient().send("127.0.0.1", port, "WRITE|k|v");
+        String envelope = "{\"verb\":\"WRITE\",\"args\":[\"k\",\"v\"],\"body\":{}}";
+        new HttpClient().send("127.0.0.1", port, envelope);
 
         String captured = wire.get();
-        assertTrue(captured.startsWith("POST /WRITE HTTP/1.1\r\n"),
-                "expected POST /WRITE request line, got: " + captured);
-        assertTrue(captured.contains("Content-Length: 3\r\n"),
-                "expected Content-Length: 3 for body 'k|v', got: " + captured);
-        assertTrue(captured.endsWith("\r\n\r\nk|v"),
-                "expected body 'k|v' terminated by blank line, got: " + captured);
+        assertTrue(captured.startsWith("POST / HTTP/1.1\r\n"),
+                "expected POST / request line, got: " + captured);
+        assertTrue(captured.contains("Content-Type: application/json\r\n"),
+                "expected Content-Type application/json, got: " + captured);
+        assertTrue(captured.contains("Content-Length: "
+                        + envelope.getBytes(StandardCharsets.UTF_8).length + "\r\n"),
+                "expected Content-Length matching body bytes, got: " + captured);
+        assertTrue(captured.endsWith("\r\n\r\n" + envelope),
+                "expected JSON envelope as body, got: " + captured);
     }
 
     /** Standard happy path: server returns a body, client returns it. */
@@ -80,7 +88,8 @@ class HttpClientTest {
     void returnsBodyFromContentLengthResponse() throws Exception {
         serverThread = forkServer(req -> cannedResponse("Hello world"));
 
-        String response = new HttpClient().send("127.0.0.1", port, "READ|k");
+        String response = new HttpClient().send("127.0.0.1", port,
+                "{\"verb\":\"READ\",\"args\":[\"k\"],\"body\":{}}");
 
         assertEquals("Hello world", response);
     }
@@ -94,7 +103,8 @@ class HttpClientTest {
     void zeroContentLengthResponseReturnsEmptyString() throws Exception {
         serverThread = forkServer(req -> cannedResponse(""));
 
-        String response = new HttpClient().send("127.0.0.1", port, "WRITE|k|v");
+        String response = new HttpClient().send("127.0.0.1", port,
+                "{\"verb\":\"WRITE\",\"args\":[\"k\",\"v\"],\"body\":{}}");
 
         assertEquals("", response);
     }
@@ -111,7 +121,8 @@ class HttpClientTest {
         serverThread = forkServer(req -> "HTTP/1.1 200 OK\r\nContent-Length: not-a-number\r\n\r\n");
 
         assertThrows(ProtocolException.class,
-                () -> new HttpClient().send("127.0.0.1", port, "WRITE|k|v"));
+                () -> new HttpClient().send("127.0.0.1", port,
+                        "{\"verb\":\"WRITE\",\"args\":[\"k\"],\"body\":{}}"));
     }
 
     /** Connection refused → {@link ConnectionException} with origin tag. */
@@ -120,7 +131,8 @@ class HttpClientTest {
         server.close();
 
         ConnectionException ex = assertThrows(ConnectionException.class,
-                () -> new HttpClient().send("127.0.0.1", port, "WRITE|k|v"));
+                () -> new HttpClient().send("127.0.0.1", port,
+                        "{\"verb\":\"WRITE\",\"args\":[\"k\"],\"body\":{}}"));
 
         assertEquals("HTTP", ex.getOrigin());
     }

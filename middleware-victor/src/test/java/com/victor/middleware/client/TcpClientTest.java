@@ -31,6 +31,10 @@ import com.victor.middleware.exceptions.ConnectionException;
  * in-process — no real network hops. This exercises the full blocking-IO
  * path: {@code Socket.connect}, {@code PrintWriter.println},
  * {@code BufferedReader.readLine}, timeout handling.</p>
+ *
+ * <p>After the pipe codec removal the wire format is the JSON envelope
+ * itself — there is no separate framing layer. TCP/UDP are "raw JSON
+ * over sockets".</p>
  */
 class TcpClientTest {
 
@@ -54,21 +58,22 @@ class TcpClientTest {
         }
     }
 
-    /** Standard round-trip: client sends a line, server echoes it, client returns it. */
+    /** Standard round-trip: client sends a JSON envelope, server echoes, client returns it. */
     @Test
     void roundTripsRequestLineAndResponse() throws Exception {
         serverThread = forkServer(req -> "ECHO:" + req);
 
         TcpClient client = new TcpClient();
-        String response = client.send("127.0.0.1", port, "WRITE|k|v");
+        String envelope = "{\"verb\":\"WRITE\",\"args\":[\"k\",\"v\"],\"body\":{}}";
+        String response = client.send("127.0.0.1", port, envelope);
 
-        assertEquals("ECHO:WRITE|k|v", response);
+        assertEquals("ECHO:" + envelope, response);
     }
 
     /**
      * Captures the exact bytes the client wrote so we can verify the
-     * request framing — the wire format is the contract the gateway
-     * and worker depend on.
+     * request framing — TCP just ships the JSON envelope bytes
+     * terminated by a newline so the echo server can read a line.
      */
     @Test
     void writesRequestTerminatedByNewline() throws Exception {
@@ -78,10 +83,11 @@ class TcpClientTest {
             return "ok";
         });
 
-        new TcpClient().send("127.0.0.1", port, "READ|smoke-key");
+        String envelope = "{\"verb\":\"READ\",\"args\":[\"smoke-key\"],\"body\":{}}";
+        new TcpClient().send("127.0.0.1", port, envelope);
 
-        assertEquals("READ|smoke-key", captured.toString(),
-                "TcpClient must write the raw request with no quoting or padding");
+        assertEquals(envelope, captured.toString(),
+                "TcpClient must write the raw JSON envelope with no quoting or padding");
     }
 
     /** Empty response from the server is returned as empty string, not null. */
@@ -89,7 +95,8 @@ class TcpClientTest {
     void emptyServerResponseReturnsEmptyString() throws Exception {
         serverThread = forkServer(req -> "");
 
-        String response = new TcpClient().send("127.0.0.1", port, "PING");
+        String response = new TcpClient().send("127.0.0.1", port,
+                "{\"verb\":\"PING\",\"args\":[],\"body\":{}}");
 
         assertEquals("", response);
     }
@@ -105,7 +112,8 @@ class TcpClientTest {
         server.close();
 
         ConnectionException ex = assertThrows(ConnectionException.class,
-                () -> new TcpClient().send("127.0.0.1", port, "WRITE|k|v"));
+                () -> new TcpClient().send("127.0.0.1", port,
+                        "{\"verb\":\"WRITE\",\"args\":[\"k\"],\"body\":{}}"));
 
         assertEquals("TCP", ex.getOrigin(),
                 "origin tag should identify TCP transport for caller diagnostics");

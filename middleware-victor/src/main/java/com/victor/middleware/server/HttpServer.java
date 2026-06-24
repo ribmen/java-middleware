@@ -126,8 +126,10 @@ public class HttpServer implements ComponentServer {
                 }
             }
 
-            // string no formato que o Gateway espera: "COMMAND|PAYLOAD"
-            String gatewayRequest = command + "|" + payload;
+            // The wire body is whatever the caller sent — the server is
+            // codec-agnostic and just forwards the payload string to the
+            // handler. The path token is no longer used for dispatch.
+            String gatewayRequest = payload;
 
             String responsePayload = handler.handle(gatewayRequest);
             byte[] payloadBytes = responsePayload.getBytes("UTF-8");

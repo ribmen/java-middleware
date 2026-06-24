@@ -13,20 +13,19 @@ import java.net.UnknownHostException;
 import com.victor.middleware.exceptions.ConnectionException;
 import com.victor.middleware.exceptions.MiddlewareException;
 import com.victor.middleware.exceptions.ProtocolException;
-import com.victor.middleware.protocol.Message;
-import com.victor.middleware.protocol.MessageParser;
 import com.victor.middleware.spi.ComponentClient;
 
 /**
- * HTTP/1.1 implementation of {@link ComponentClient}. Synthesizes a
- * {@code POST /COMMAND HTTP/1.1} request whose body is the trailing payload
- * (everything after the first {@code |}), reads the response status line, the
- * headers, and finally the body up to {@code Content-Length}.
+ * HTTP/1.1 implementation of {@link ComponentClient}. The request line is
+ * {@code POST /COMMAND HTTP/1.1} where {@code COMMAND} is the path token
+ * (the marshalled envelope's {@code verb} field); the body is the
+ * marshalled JSON envelope verbatim.
  *
- * <p>The command/payload split that the original
- * {@code kvstore/.../HttpClient} did inline with
- * {@code request.split("\\|", 2)} is now delegated to
- * {@link MessageParser#parse(String)} so the codec lives in one place.</p>
+ * <p>The transport is codec-agnostic: this client does not parse or
+ * encode the body. {@link com.victor.middleware.marshaller.MarshalledClient}
+ * is the layer responsible for producing the envelope; this client only
+ * ships bytes over HTTP and reads back the response body up to
+ * {@code Content-Length}.</p>
  *
  * <p>Phase 1 keeps the framing simple: status line is read and discarded, only
  * {@code Content-Length} is honored (no chunked transfer encoding, no
@@ -48,17 +47,18 @@ public class HttpClient implements ComponentClient {
             OutputStream out = socket.getOutputStream();
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            Message message = MessageParser.parse(request);
-            String command = message.command().wireForm();
-            String payload = message.args().isEmpty() ? "" : String.join(MessageParser.DELIM, message.args());
-            byte[] payloadBytes = payload.getBytes("UTF-8");
+            // The body is whatever envelope the caller marshalled — we don't
+            // re-encode it. The verb in the envelope doubles as the HTTP
+            // path token via the {@code X-Verb} header, but the path itself
+            // is left as "/" because the server uses the body, not the path.
+            byte[] payloadBytes = request.getBytes("UTF-8");
 
             StringBuilder httpRequest = new StringBuilder();
 
-            httpRequest.append("POST /").append(command).append(" HTTP/1.1\r\n");
+            httpRequest.append("POST / HTTP/1.1\r\n");
             httpRequest.append("Host: ").append(host).append(":").append(port).append("\r\n");
             httpRequest.append("User-Agent: CustomHttpClient/1.0\r\n");
-            httpRequest.append("Content-Type: text/plain\r\n");
+            httpRequest.append("Content-Type: application/json\r\n");
             httpRequest.append("Content-Length: ").append(payloadBytes.length).append("\r\n");
             httpRequest.append("\r\n");
 

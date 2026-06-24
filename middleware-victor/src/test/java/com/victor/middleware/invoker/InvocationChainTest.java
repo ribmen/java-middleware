@@ -27,15 +27,15 @@ class InvocationChainTest {
         Message m = new Message(Command.WRITE, List.of("k", "v"));
         InvocationContext ctx = ctxFor(m);
         AtomicReference<Message> seen = new AtomicReference<>();
-        Function<Message, String> terminal = msg -> {
+        Function<Message, Message> terminal = msg -> {
             seen.set(msg);
-            return "wrote:k|v";
+            return new Message(Command.OK, List.of("wrote:k|v"));
         };
         InvocationChain chain = InvocationChainImpl.of(List.of(), terminal);
 
-        String result = chain.proceed(ctx);
+        Message result = chain.proceed(ctx);
 
-        assertEquals("wrote:k|v", result);
+        assertEquals(new Message(Command.OK, List.of("wrote:k|v")), result);
         assertEquals(m, seen.get(), "terminal must receive the Message from the context");
     }
 
@@ -47,29 +47,34 @@ class InvocationChainTest {
 
         InvocationInterceptor first = (c, ch) -> {
             log.add("first:pre");
-            String r = ch.proceed(c);
-            log.add("first:post:" + r);
+            Message r = ch.proceed(c);
+            log.add("first:post:" + r.command().wireForm() + "/" + r.args());
             return r;
         };
         InvocationInterceptor second = (c, ch) -> {
             log.add("second:pre");
-            String r = ch.proceed(c);
-            log.add("second:post:" + r);
+            Message r = ch.proceed(c);
+            log.add("second:post:" + r.command().wireForm() + "/" + r.args());
             return r;
         };
 
         InvocationChain chain = InvocationChainImpl.of(List.of(first, second),
                 msg -> {
                     log.add("terminal");
-                    return "read:k";
+                    return new Message(Command.OK, List.of("read:k"));
                 });
 
-        String result = chain.proceed(ctx);
+        Message result = chain.proceed(ctx);
 
-        assertEquals("read:k", result);
+        assertEquals(new Message(Command.OK, List.of("read:k")), result);
         // Pre-order recursion: first wraps second wraps terminal.
         assertEquals(
-                List.of("first:pre", "second:pre", "terminal", "second:post:read:k", "first:post:read:k"),
+                List.of(
+                        "first:pre",
+                        "second:pre",
+                        "terminal",
+                        "second:post:OK/[read:k]",
+                        "first:post:OK/[read:k]"),
                 log);
     }
 
@@ -79,17 +84,18 @@ class InvocationChainTest {
         InvocationContext ctx = ctxFor(m);
         AtomicReference<Boolean> terminalCalled = new AtomicReference<>(false);
 
-        InvocationInterceptor shortCircuit = (c, ch) -> "intercepted:" + c.traceId();
+        InvocationInterceptor shortCircuit = (c, ch) ->
+                new Message(Command.OK, List.of("intercepted:" + c.traceId()));
 
         InvocationChain chain = InvocationChainImpl.of(List.of(shortCircuit),
                 msg -> {
                     terminalCalled.set(true);
-                    return "should-not-happen";
+                    return new Message(Command.OK, List.of("should-not-happen"));
                 });
 
-        String result = chain.proceed(ctx);
+        Message result = chain.proceed(ctx);
 
-        assertEquals("intercepted:" + ctx.traceId(), result);
+        assertEquals(new Message(Command.OK, List.of("intercepted:" + ctx.traceId())), result);
         assertEquals(Boolean.FALSE, terminalCalled.get(),
                 "terminal must NOT be called when interceptor skips proceed");
     }
@@ -99,12 +105,17 @@ class InvocationChainTest {
         Message m = new Message(Command.READ, List.of("k"));
         InvocationContext ctx = ctxFor(m);
 
-        InvocationInterceptor wrapper = (c, ch) -> "WRAPPED(" + ch.proceed(c) + ")";
+        InvocationInterceptor wrapper = (c, ch) -> {
+            Message inner = ch.proceed(c);
+            return new Message(inner.command(),
+                    List.of("WRAPPED(" + inner.firstArg() + ")"));
+        };
 
         InvocationChain chain = InvocationChainImpl.of(List.of(wrapper),
-                msg -> "read:k");
+                msg -> new Message(Command.OK, List.of("read:k")));
 
-        assertEquals("WRAPPED(read:k)", chain.proceed(ctx));
+        assertEquals(new Message(Command.OK, List.of("WRAPPED(read:k)")),
+                chain.proceed(ctx));
     }
 
     @Test
@@ -117,7 +128,7 @@ class InvocationChainTest {
         };
 
         InvocationChain chain = InvocationChainImpl.of(List.of(aborter),
-                msg -> "ok");
+                msg -> new Message(Command.OK, List.of("ok")));
 
         InvocationAbortedException ex = assertThrows(InvocationAbortedException.class,
                 () -> chain.proceed(ctx));
@@ -126,7 +137,7 @@ class InvocationChainTest {
 
     @Test
     void chainImplThrowsOnNullInterceptorsList() {
-        Function<Message, String> terminal = msg -> "x";
+        Function<Message, Message> terminal = msg -> new Message(Command.OK, List.of("x"));
         assertThrows(NullPointerException.class,
                 () -> InvocationChainImpl.of(null, terminal));
     }
@@ -143,17 +154,23 @@ class InvocationChainTest {
         Message m = new Message(Command.WRITE, List.of("k", "v"));
         InvocationContext ctx = ctxFor(m);
         List<InvocationInterceptor> source = new ArrayList<>();
-        InvocationInterceptor a = (c, ch) -> "A:" + ch.proceed(c);
-        InvocationInterceptor b = (c, ch) -> "B:" + ch.proceed(c);
+        InvocationInterceptor a = (c, ch) -> {
+            Message inner = ch.proceed(c);
+            return new Message(inner.command(), List.of("A:" + inner.firstArg()));
+        };
+        InvocationInterceptor b = (c, ch) -> {
+            Message inner = ch.proceed(c);
+            return new Message(inner.command(), List.of("B:" + inner.firstArg()));
+        };
         source.add(a);
 
-        InvocationChain chain = InvocationChainImpl.of(source, msg -> "term");
+        InvocationChain chain = InvocationChainImpl.of(source, msg -> new Message(Command.OK, List.of("term")));
         // Mutate source after construction
         source.add(b);
 
         // The chain must only call 'a' (the snapshot it took at construction).
-        String result = chain.proceed(ctx);
-        assertEquals("A:term", result);
+        Message result = chain.proceed(ctx);
+        assertEquals(new Message(Command.OK, List.of("A:term")), result);
     }
 
     /** Sentinel used to assert interceptor sees the same context it was given. */
@@ -168,7 +185,8 @@ class InvocationChainTest {
             return ch.proceed(c);
         };
 
-        InvocationChain chain = InvocationChainImpl.of(List.of(capture), msg -> "ok");
+        InvocationChain chain = InvocationChainImpl.of(List.of(capture),
+                msg -> new Message(Command.OK, List.of("ok")));
         chain.proceed(ctx);
 
         assertSame(ctx, seen.get(), "interceptor must receive the context it was called with");

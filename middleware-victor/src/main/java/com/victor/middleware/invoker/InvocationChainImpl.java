@@ -21,12 +21,12 @@ final class InvocationChainImpl implements InvocationChain {
 
     private final List<InvocationInterceptor> interceptors;
     private final int index;
-    private final Function<Message, String> terminal;
+    private final Function<Message, Message> terminal;
 
     private InvocationChainImpl(
             List<InvocationInterceptor> interceptors,
             int index,
-            Function<Message, String> terminal) {
+            Function<Message, Message> terminal) {
         this.interceptors = interceptors;
         this.index = index;
         this.terminal = terminal;
@@ -41,14 +41,14 @@ final class InvocationChainImpl implements InvocationChain {
      */
     static InvocationChainImpl of(
             List<InvocationInterceptor> interceptors,
-            Function<Message, String> terminal) {
+            Function<Message, Message> terminal) {
         Objects.requireNonNull(interceptors, "interceptors");
         Objects.requireNonNull(terminal, "terminal");
         return new InvocationChainImpl(List.copyOf(interceptors), 0, terminal);
     }
 
     @Override
-    public String proceed(InvocationContext ctx) throws InvocationAbortedException {
+    public Message proceed(InvocationContext ctx) throws InvocationAbortedException {
         if (index < interceptors.size()) {
             InvocationInterceptor next = interceptors.get(index);
             InvocationChain child = new InvocationChainImpl(interceptors, index + 1, terminal);

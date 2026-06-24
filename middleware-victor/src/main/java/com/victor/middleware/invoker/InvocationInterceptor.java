@@ -1,6 +1,7 @@
 package com.victor.middleware.invoker;
 
 import com.victor.middleware.exceptions.InvocationAbortedException;
+import com.victor.middleware.protocol.Message;
 
 /**
  * A single cross-cutting concern that wraps an invocation in the dispatcher.
@@ -14,11 +15,14 @@ import com.victor.middleware.exceptions.InvocationAbortedException;
  * </ul>
  *
  * <p>The signature mirrors the dispatcher contract
- * ({@code String dispatch(Message) → String}): interceptors transform or
- * wrap the result string as it flows back up the chain.</p>
+ * ({@code Message dispatch(Message) → Message}): interceptors transform
+ * or wrap the typed result as it flows back up the chain. There is no
+ * longer a string round-trip inside the in-process dispatcher — the
+ * marshaller is the only layer that touches wire form, and it lives
+ * outside this SPI.</p>
  */
 @FunctionalInterface
 public interface InvocationInterceptor {
-    String around(InvocationContext ctx, InvocationChain chain)
+    Message around(InvocationContext ctx, InvocationChain chain)
             throws InvocationAbortedException;
 }

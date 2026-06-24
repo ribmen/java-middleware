@@ -1,6 +1,7 @@
 package com.victor.middleware.invoker;
 
 import com.victor.middleware.exceptions.InvocationAbortedException;
+import com.victor.middleware.protocol.Message;
 
 /**
  * Built-in interceptor that logs every invocation's IN, OUT, and ABORT
@@ -10,23 +11,28 @@ import com.victor.middleware.exceptions.InvocationAbortedException;
  * <p>Log shape:</p>
  * <ul>
  *   <li>{@code [INVOKER] IN  trace=<uuid> cmd=<CMD> args=[...]}</li>
- *   <li>{@code [INVOKER] OUT trace=<uuid> elapsed_ms=<n> result=<string>}</li>
+ *   <li>{@code [INVOKER] OUT trace=<uuid> elapsed_ms=<n> verb=<CMD> args=[...]}</li>
  *   <li>{@code [INVOKER] OUT trace=<uuid> ABORTED msg=<string>}</li>
  * </ul>
+ *
+ * <p>The OUT line prints the response {@link Message} (verb + args)
+ * rather than a wire string — consistent with the typed
+ * interceptor contract after the pipe codec removal.</p>
  */
 public final class LoggingInterceptor implements InvocationInterceptor {
 
     @Override
-    public String around(InvocationContext ctx, InvocationChain chain)
+    public Message around(InvocationContext ctx, InvocationChain chain)
             throws InvocationAbortedException {
         System.out.println("[INVOKER] IN  trace=" + ctx.traceId()
                 + " cmd=" + ctx.command().wireForm()
                 + " args=" + ctx.args());
         try {
-            String result = chain.proceed(ctx);
+            Message result = chain.proceed(ctx);
             System.out.println("[INVOKER] OUT trace=" + ctx.traceId()
                     + " elapsed_ms=" + (ctx.elapsedNanos() / 1_000_000)
-                    + " result=" + result);
+                    + " verb=" + result.command().wireForm()
+                    + " args=" + result.args());
             return result;
         } catch (InvocationAbortedException e) {
             System.out.println("[INVOKER] OUT trace=" + ctx.traceId()

@@ -5,23 +5,27 @@ import java.util.function.Function;
 
 import com.victor.middleware.protocol.Command;
 import com.victor.middleware.protocol.Message;
-import com.victor.middleware.protocol.MessageParser;
 
 /**
  * Minimal in-process dispatcher: maps each {@link Command} to a handler
- * function, then routes {@link Message}s by command. This is the seed of
- * the future annotation-driven invoker — today the map is passed in by
- * hand; tomorrow the same class can back handlers discovered via
- * {@code @Handler(WRITE)} reflection.
+ * function, then routes {@link Message}s by command.
+ *
+ * <p>The dispatcher speaks only the typed contract: every handler is
+ * {@code Function<Message, Message>} and the dispatcher returns
+ * {@link Message} directly. Serialization to/from the wire is the
+ * responsibility of the {@code Marshaller} / {@code MarshalledServer}
+ * decorator layers — there is no string round-trip inside the dispatcher
+ * any more.</p>
  *
  * <p>Contract:</p>
  * <ul>
- *     <li>Unknown / unregistered commands return a wire-form error string
- *         (the dispatcher speaks the same protocol as the gateway, so
- *         errors flow back to the client unchanged).</li>
+ *     <li>Unknown / unregistered commands return a typed error
+ *         {@code Message(UNKNOWN, ["ERRO: ..."])} so callers can react
+ *         uniformly without parsing wire form.</li>
  *     <li>Handler exceptions are caught and converted to the same
- *         wire-form error shape — a thrown {@code RuntimeException} never
- *         becomes a silent connection drop.</li>
+ *         {@code UNKNOWN}-command error shape — a thrown
+ *         {@code RuntimeException} never becomes a silent connection
+ *         drop.</li>
  *     <li>Re-registering a command overwrites the prior handler.</li>
  * </ul>
  *
@@ -33,10 +37,10 @@ import com.victor.middleware.protocol.MessageParser;
  */
 public class Dispatcher {
 
-    private final EnumMap<Command, Function<Message, String>> handlers = new EnumMap<>(Command.class);
+    private final EnumMap<Command, Function<Message, Message>> handlers = new EnumMap<>(Command.class);
 
     /** Bind a handler to a command. Overwrites any previously-registered handler. */
-    public void register(Command command, Function<Message, String> handler) {
+    public void register(Command command, Function<Message, Message> handler) {
         handlers.put(command, handler);
     }
 
@@ -46,36 +50,40 @@ public class Dispatcher {
     }
 
     /**
-     * Route a message to its handler. On any failure (missing handler,
-     * {@code UNKNOWN} command, handler exception) returns a wire-form
-     * error string starting with {@code "ERRO:"}.
+     * Route a typed message to its handler and return the typed response.
+     * On any failure (missing handler, {@code UNKNOWN} command, handler
+     * exception) returns a {@link Message} with command {@code UNKNOWN}
+     * and a single arg starting with {@code "ERRO:"}.
      */
-    public String dispatch(Message msg) {
+    public Message dispatch(Message msg) {
         if (msg == null || msg.command() == Command.UNKNOWN) {
-            return "ERRO: Comando desconhecido.";
+            return errorMessage("Comando desconhecido.");
         }
-        Function<Message, String> handler = handlers.get(msg.command());
+        Function<Message, Message> handler = handlers.get(msg.command());
         if (handler == null) {
-            return "ERRO: Sem handler para " + msg.command().wireForm() + ".";
+            return errorMessage("Sem handler para " + msg.command().wireForm() + ".");
         }
         try {
-            return handler.apply(msg);
+            Message response = handler.apply(msg);
+            return response == null
+                    ? errorMessage("Handler retornou null.")
+                    : response;
         } catch (RuntimeException e) {
-            return "ERRO: Handler lançou " + e.getClass().getSimpleName() + ": " + e.getMessage();
+            return errorMessage("Handler lançou "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
     /**
-     * Typed counterpart to {@link #dispatch(Message)}. Returns a
-     * {@link Message} directly instead of a wire-form string, so the
-     * Marshaller decorator doesn't pay a parse/encode round trip.
-     *
-     * <p>The error-path behavior mirrors {@code dispatch}: the same
-     * {@code "ERRO:"} payload is parsed back into a {@link Message}
-     * for callers that want a uniform typed surface.</p>
+     * Alias for {@link #dispatch(Message)} kept for source compatibility
+     * with the original typed entry point pinned by
+     * {@code DispatcherTest#dispatchTyped}.
      */
     public Message dispatchTyped(Message msg) {
-        String wire = dispatch(msg);
-        return MessageParser.parse(wire);
+        return dispatch(msg);
+    }
+
+    private static Message errorMessage(String detail) {
+        return new Message(Command.UNKNOWN, java.util.List.of("ERRO: " + detail));
     }
 }

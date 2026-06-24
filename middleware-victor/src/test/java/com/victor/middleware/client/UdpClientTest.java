@@ -17,6 +17,9 @@ import com.victor.middleware.exceptions.ConnectionException;
  * Pins the {@link UdpClient} wire contract against a real
  * {@link DatagramSocket} echo double — no mocks. UDP has no framing:
  * whatever the server sends back is the response.
+ *
+ * <p>After the pipe codec removal the wire format is the JSON envelope
+ * bytes verbatim — UDP just ships them.</p>
  */
 class UdpClientTest {
 
@@ -40,20 +43,22 @@ class UdpClientTest {
         }
     }
 
-    /** Standard round-trip: client sends a datagram, server echoes, client returns it. */
+    /** Standard round-trip: client sends a JSON envelope, server echoes, client returns it. */
     @Test
     void roundTripsDatagramPayloadAndReply() throws Exception {
         StringBuilder captured = new StringBuilder();
         serverThread = forkServer(req -> {
-            captured.append(new String(req.getData(), 0, req.getLength()));
-            return ("ECHO:" + new String(req.getData(), 0, req.getLength())).getBytes();
+            String payload = new String(req.getData(), 0, req.getLength());
+            captured.append(payload);
+            return ("ECHO:" + payload).getBytes();
         });
 
-        String response = new UdpClient().send("127.0.0.1", port, "WRITE|k|v");
+        String envelope = "{\"verb\":\"WRITE\",\"args\":[\"k\",\"v\"],\"body\":{}}";
+        String response = new UdpClient().send("127.0.0.1", port, envelope);
 
-        assertEquals("ECHO:WRITE|k|v", response);
-        assertEquals("WRITE|k|v", captured.toString(),
-                "UdpClient must send the raw request bytes unchanged");
+        assertEquals("ECHO:" + envelope, response);
+        assertEquals(envelope, captured.toString(),
+                "UdpClient must send the raw JSON envelope bytes unchanged");
     }
 
     /**
@@ -64,7 +69,8 @@ class UdpClientTest {
     void preservesUtf8PayloadBytes() throws Exception {
         serverThread = forkServer(req -> "ok".getBytes());
 
-        String response = new UdpClient().send("127.0.0.1", port, "WRITE|chave|ção");
+        String response = new UdpClient().send("127.0.0.1", port,
+                "{\"verb\":\"WRITE\",\"args\":[\"chave\",\"ção\"],\"body\":{}}");
 
         assertEquals("ok", response);
     }
@@ -79,7 +85,8 @@ class UdpClientTest {
         serverSocket.close(); // no server → no reply → 1s timeout
 
         ConnectionException ex = assertThrows(ConnectionException.class,
-                () -> new UdpClient().send("127.0.0.1", port, "WRITE|k|v"));
+                () -> new UdpClient().send("127.0.0.1", port,
+                        "{\"verb\":\"WRITE\",\"args\":[\"k\"],\"body\":{}}"));
 
         assertEquals("UDP", ex.getOrigin());
     }

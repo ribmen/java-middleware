@@ -38,23 +38,23 @@ class LoggingInterceptorTest {
         return buffer.toString(StandardCharsets.UTF_8);
     }
 
-    /** Test-only InvocationChain stub that records calls and returns a fixed result. */
+    /** Test-only InvocationChain stub that records calls and returns a fixed typed result. */
     private static final class StubChain implements InvocationChain {
         int proceedCalls = 0;
-        final String resultToReturn;
+        final Message resultToReturn;
         final InvocationAbortedException toThrow;
 
-        StubChain(String resultToReturn) {
+        StubChain(Message resultToReturn) {
             this(resultToReturn, null);
         }
 
-        StubChain(String resultToReturn, InvocationAbortedException toThrow) {
+        StubChain(Message resultToReturn, InvocationAbortedException toThrow) {
             this.resultToReturn = resultToReturn;
             this.toThrow = toThrow;
         }
 
         @Override
-        public String proceed(InvocationContext ctx) throws InvocationAbortedException {
+        public Message proceed(InvocationContext ctx) throws InvocationAbortedException {
             proceedCalls++;
             if (toThrow != null) {
                 throw toThrow;
@@ -68,7 +68,7 @@ class LoggingInterceptorTest {
         LoggingInterceptor interceptor = new LoggingInterceptor();
         Message m = new Message(Command.WRITE, List.of("k", "v"));
         InvocationContext ctx = InvocationContext.forMessage(m);
-        StubChain chain = new StubChain("wrote:k|v");
+        StubChain chain = new StubChain(new Message(Command.OK, List.of("wrote:k|v")));
 
         interceptor.around(ctx, chain);
 
@@ -84,22 +84,25 @@ class LoggingInterceptorTest {
     }
 
     @Test
-    void postLogsResultAndElapsedMs() throws InvocationAbortedException {
+    void postLogsResultVerbAndElapsedMs() throws InvocationAbortedException {
         LoggingInterceptor interceptor = new LoggingInterceptor();
         Message m = new Message(Command.READ, List.of("k"));
         InvocationContext ctx = InvocationContext.forMessage(m);
-        StubChain chain = new StubChain("read:k");
+        StubChain chain = new StubChain(new Message(Command.OK, List.of("read:k")));
 
-        String result = interceptor.around(ctx, chain);
+        Message result = interceptor.around(ctx, chain);
 
-        assertEquals("read:k", result, "interceptor must pass through the chain's result");
+        assertEquals(new Message(Command.OK, List.of("read:k")), result,
+                "interceptor must pass through the chain's typed result");
         String out = captured();
         assertTrue(out.contains("[INVOKER] OUT"),
                 "expected OUT log line, got: " + out);
         assertTrue(out.contains("trace=" + ctx.traceId()),
                 "expected OUT line to include traceId, got: " + out);
-        assertTrue(out.contains("result=read:k"),
-                "expected OUT line to include result=read:k, got: " + out);
+        assertTrue(out.contains("verb=OK"),
+                "expected OUT line to include verb=OK, got: " + out);
+        assertTrue(out.contains("args=[read:k]"),
+                "expected OUT line to include args=[read:k], got: " + out);
         assertTrue(out.contains("elapsed_ms="),
                 "expected OUT line to include elapsed_ms=, got: " + out);
     }
@@ -129,7 +132,7 @@ class LoggingInterceptorTest {
         LoggingInterceptor interceptor = new LoggingInterceptor();
         Message m = new Message(Command.WRITE, List.of("k", "v"));
         InvocationContext ctx = InvocationContext.forMessage(m);
-        StubChain chain = new StubChain("ok");
+        StubChain chain = new StubChain(new Message(Command.OK, List.of("ok")));
 
         interceptor.around(ctx, chain);
 
@@ -141,7 +144,7 @@ class LoggingInterceptorTest {
         LoggingInterceptor interceptor = new LoggingInterceptor();
         Message m = new Message(Command.READ, List.of("k"));
         InvocationContext ctx = InvocationContext.forMessage(m);
-        StubChain chain = new StubChain("read:k");
+        StubChain chain = new StubChain(new Message(Command.OK, List.of("read:k")));
 
         interceptor.around(ctx, chain);
 
