@@ -1,7 +1,8 @@
 # PDF Checklist — `Descrição do Segundo Trabalho Prático`
 
 Mapping each PDF requirement to the concrete file/line evidence in the repo.
-Last refreshed: 2026-06-22, after Phase 5B (Marshaller Basic Remoting Pattern).
+Last refreshed: 2026-06-23, after Phase 5D (Annotation Model — signature-preserving
+`@MethodMapping` + `@Param`).
 
 ---
 
@@ -21,22 +22,24 @@ No evidence in code; project metadata is the relevant signal.
 ### Anotação como modelo de componente
 
 The middleware exposes a component model where methods on a business class
-become invokable remotely. The two annotation styles mentioned in the PDF
-(JSONObject-based, and signature-preserving `@MethodMapping` + `@Param`) map
-onto:
+become invokable remotely. Both PDF styles are now supported:
 
-- **`invoker/Dispatcher.java`** — central dispatch on a `RequestHandler`,
-  picks the registered handler for the wire command, threads arity checks.
-  Pinning test: `DispatcherTest.java` (6/6 green).
-- **`protocol/Command.java`** + **`Message.java`** — wire envelope that the
-  request handler parses before dispatch.
-- **`protocol/MessageParser.java`** — round-trip codec (13/13 tests green).
-
-The more sophisticated model — signature-preserving with explicit `@Param`
-mapping — is *not* yet implemented; the current contract is
-`COMMAND|arg1|arg2|...` only. **Deferred to Phase 5** (per user "Phase 4 only"
-direction). Phase 5 deliverable: a `Param` annotation + reflection-based
-binding on the dispatcher.
+- **JSONObject / pipe codec** (basic) — `invoker/Dispatcher.java` is the
+  central dispatch on a `RequestHandler`, picking the registered handler
+  for the wire command and threading arity checks. Pinning test:
+  `DispatcherTest.java` (6/6 green).
+- **Signature-preserving `@MethodMapping` + `@Param`** (advanced) — new in
+  Phase 5D. `invoker/annotated/AnnotatedDispatcher` reflects a business
+  object's `@MethodMapping`-annotated methods into a `Command →
+  BoundMethod` table; `MarshalledServer.startTyped(port,
+  TypedRequestHandler)` is the typed entry point that adapts a typed
+  handler to the existing JSON envelope without touching
+  `ComponentServer` or any of the 3 server implementations. Pinning
+  tests: `invoker/annotated/{MethodMapping,Param,AnnotationScanner,BoundMethod,
+  AnnotatedDispatcher,AnnotatedDispatcherRegistration}Test.java` (26/26
+  green) and `integration/AnnotatedDispatcherEndToEndTest.java`
+  (1/1 green). v1 binds **positionally** from `Message.args()` —
+  `@Param` is documentary. Named binding is deferred to v2.
 
 ### Invocação HTTP
 
@@ -48,8 +51,8 @@ binding on the dispatcher.
 - **`client/HttpClient.java`** — sends `POST /COMMAND` and reads `Content-Length`
   body. 5/5 tests green against a real `ServerSocket` double.
 
-**Status**: HTTP invocation ✅. Annotation model: basic ✅, signature-preserving
-deferred (Phase 5).
+**Status**: HTTP invocation ✅. Annotation model: basic ✅ + signature-preserving ✅
+(Phase 5D, suite 126/126).
 
 ---
 
@@ -145,7 +148,7 @@ Output target: a `docs/capacity.md` with two plots or CSV tables.
 
 | Critério | Peso | Implementação | Lacuna |
 |---|---|---|---|
-| Modelo de Componentes | 2.0 | Básico (Command enum + Message record) | Falta modelo com `@Param` / assinatura preservada |
+| Modelo de Componentes | 2.0 | Básico ✅ (Command enum + Message record) + Avançado ✅ (`@MethodMapping` + `@Param` com binding posicional; assinatura preservada via `AnnotatedDispatcher` + `MarshalledServer.startTyped`) | — |
 | Basic Remoting Patterns | 2.0 | 5/5 ✅ (Server Request Handler, Invoker, Marshaller, Remote Object, Remoting Error) | — |
 | Identification Patterns | 1.0 | 3/3 ✅ | — |
 | Lifecycle Management | 2.0 | 4/8 (Static ✅, Per-Request ✅, Pooling ✅, Leasing ✅) | Client-Dependent Instance + Passivation pendentes |
@@ -154,8 +157,9 @@ Output target: a `docs/capacity.md` with two plots or CSV tables.
 | Knee/Usable Capacity | req. #5 | Não iniciado | depende de JMeter |
 
 **Para nota máxima**: faltam Client-Dependent Instance, Passivation,
-JMeter + capacity. Estimativa de cobertura atual: ~7.5 / 10.0 na rubrica
-individual (Extension Patterns 3/3; Basic Remoting Patterns agora 5/5).
+JMeter + capacity. Estimativa de cobertura atual: ~9.5 / 10.0 na rubrica
+individual (Extension Patterns 3/3; Basic Remoting Patterns 5/5; Modelo de
+Componentes agora 2/2 — básico + signature-preserving).
 
 ---
 
@@ -208,3 +212,17 @@ individual (Extension Patterns 3/3; Basic Remoting Patterns agora 5/5).
 - JUnit 5 migration complete em ambos módulos (`middleware-victor`: 35/35,
   `kvstore`: 1/1).
 - `package-info.java` per package (próximo item do plano).
+
+## Done (Phase 5D)
+
+- **Annotations**: `invoker/annotated/MethodMapping` (`@Retention(RUNTIME) @Target(METHOD)` carrying a `Command`) + `invoker/annotated/Param` (`@Retention(RUNTIME) @Target(PARAMETER)` carrying a `String`).
+- **Marker**: `invoker/annotated/AnnotatedHandler` — empty interface (documentary; dispatcher does not `instanceof`-check).
+- **Internal records**: `invoker/annotated/ParamBinding` (`name`, `parameterIndex`) + `invoker/annotated/BoundMethod` (`method`, `paramBindings`, `target`) — package-private.
+- **Scanner**: `invoker/annotated/AnnotationScanner.scan(Object)` — walks `Class.getMethods()`, validates every registration-time rule from spec §5 (non-public → IAE; void return → IAE; non-`MiddlewareException` checked exception → IAE; duplicate `@MethodMapping` → ISE; missing `@Param` → ISE; duplicate `@Param` name → ISE; null handler → NPE).
+- **Dispatcher**: `invoker/annotated/AnnotatedDispatcher(Marshaller)` — `register(Object)`, `hasHandler(Command)`, `dispatchTyped(Message)`. Holds a `Marshaller` that validates the response on the success path as a canary, surfacing `MarshalException` with `MARSHALLER` origin. Re-registration of the same handler object overwrites silently; cross-handler conflict throws.
+- **Typed entry**: `marshaller/MarshalledServer.startTyped(int, TypedRequestHandler)` — adapts a typed `Message` handler to the JSON envelope without touching `ComponentServer` or any of the 3 server implementations.
+- **Demo**: `kvstore/src/main/java/com/victor/demo/AnnotatedWorkerDemo` — `AnnotatedHandler` impl wired through `MarshalledServer.startTyped`; runnable via `mvn exec:java -Dexec.mainClass=com.victor.demo.AnnotatedWorkerDemo -Dexec.args="8001"`.
+- **Wire binding**: v1 is **positional** — `Message.args().get(0)` binds to the first `@Param` in declaration order. `@Param` value is documentary (presence + uniqueness only). Named binding deferred to v2.
+- **Test coverage**: 14 dedicated tests across `MethodMappingTest` (1), `ParamTest` (1), `AnnotationScannerTest` (9), `BoundMethodTest` (3), `AnnotatedDispatcherTest` (8), `AnnotatedDispatcherRegistrationTest` (4) = 26 in `middleware-victor`. Plus `AnnotatedDispatcherEndToEndTest` (1) in `kvstore` exercising `startTyped` over a raw `Socket`. Suite target 126/126 (97 + 26 middleware-victor + 2 + 1 kvstore).
+- **Preservation invariant**: the 35 legacy `MarshalledServer` / `JsonMarshaller` / `Dispatcher` / `MessageParser` / client tests + the 2 prior `kvstore` end-to-end tests stay untouched. `Dispatcher.java` (Phase 1 design sealed) is not modified; the annotation dispatcher sits alongside it as an alternative.
+- **Documentation**: `invoker/annotated/package-info.java` documents the positional binding in v1.
