@@ -1,9 +1,25 @@
 package com.victor;
 
-import com.victor.business.KVStore;
-import com.victor.middleware.protocol.CommunicationType;
-import com.victor.middleware.spi.RequestHandler;
+import java.util.List;
 
+import com.victor.business.KVStore;
+import com.victor.middleware.protocol.Command;
+import com.victor.middleware.protocol.CommunicationType;
+import com.victor.middleware.protocol.Message;
+import com.victor.middleware.spi.TypedRequestHandler;
+
+/**
+ * Worker component: holds a {@link KVStore} and services typed
+ * {@code WRITE}/{@code READ} requests. Registers with the gateway on
+ * startup (handled by {@link BaseComponent}) and processes incoming
+ * messages through a {@link TypedRequestHandler}.
+ *
+ * <p>Phase 5D pipe-removal: the handler receives a fully-decoded
+ * {@link Message} (the JSON envelope is parsed by {@code MarshalledServer}
+ * before dispatch). The previous {@code request.split("\\|", 3)} is
+ * gone — there is no pipe to split. Arguments come pre-parsed in
+ * {@link Message#args()}; the verb is {@link Message#command()}.</p>
+ */
 public class WorkerComponent extends BaseComponent {
 
     private final KVStore kvStore;
@@ -16,34 +32,47 @@ public class WorkerComponent extends BaseComponent {
     }
 
     @Override
-    public RequestHandler getRequestHandler() {
+    public TypedRequestHandler getRequestHandler() {
         return (request) -> {
-            String[] parts = request.split("\\|", 3);
-            String command = parts[0];
-            String key = parts.length > 1 ? parts[1] : "";
-            String value = parts.length > 2 ? parts[2] : "";
+            Command command = request.command();
+            String key = request.firstArg();
 
-            System.out.println("[WORKER] Recebeu comando: " + command + " | key=" + key);
+            System.out.println("[WORKER] Recebeu comando: " + command.wireForm() + " | key=" + key);
 
-            switch (command) {
-                case "WRITE":
-                    return handleWrite(key, value);
-                case "READ": 
-                    return handleRead(key);
-                default:
-                    return "ERRO: FUNCTION NOT FOUND";
-            }
+            return switch (command) {
+                case WRITE -> handleWrite(request);
+                case READ -> handleRead(request);
+                default -> new Message(Command.UNKNOWN,
+                        List.of("ERRO: FUNCTION NOT FOUND: " + command.wireForm()));
+            };
         };
     }
 
-    private String handleWrite(String key, String value) {
-        return kvStore.write(key, value);
+    private Message handleWrite(Message msg) {
+        try {
+            String key = msg.firstArg();
+            String value = msg.secondArg();
+            String result = kvStore.write(key, value);
+            return new Message(Command.OK, List.of(result));
+        } catch (RuntimeException e) {
+            return new Message(Command.UNKNOWN,
+                    List.of("ERRO: WRITE falhou: " + e.getClass().getSimpleName() + ": " + e.getMessage()));
+        }
     }
 
-    private String handleRead(String key) {
-        return kvStore.read(key).toString();
+    private Message handleRead(Message msg) {
+        try {
+            String key = msg.firstArg();
+            String result = kvStore.read(key).toString();
+            return new Message(Command.OK, List.of(result));
+        } catch (RuntimeException e) {
+            // KVStore.read throws IllegalArgumentException for missing keys;
+            // wrap uniformly so the gateway sees a typed UNKNOWN response.
+            return new Message(Command.UNKNOWN,
+                    List.of("ERRO: " + e.getMessage()));
+        }
     }
-    
+
     public static void main(String[] args) throws Exception {
 
         int myPort = Integer.parseInt(args[0]);

@@ -15,13 +15,12 @@ import com.victor.Gateway;
 import com.victor.WorkerComponent;
 import com.victor.middleware.client.TcpClient;
 import com.victor.middleware.factory.CommunicationFactory;
+import com.victor.middleware.marshaller.JsonMarshaller;
 import com.victor.middleware.marshaller.MarshalledClient;
 import com.victor.middleware.marshaller.MarshalledServer;
-import com.victor.middleware.marshaller.MarshallerFactory;
 import com.victor.middleware.protocol.Command;
 import com.victor.middleware.protocol.CommunicationType;
 import com.victor.middleware.protocol.Message;
-import com.victor.middleware.protocol.MessageParser;
 
 /**
  * In-process end-to-end test for Phase 3 of the
@@ -71,7 +70,7 @@ class Phase3EndToEndTest {
 
     private Gateway gateway;
     private WorkerComponent worker;
-    private TcpClient client;
+    private MarshalledClient client;
     private int gatewayPort;
     private int workerPort;
     private int serverPort;
@@ -84,7 +83,7 @@ class Phase3EndToEndTest {
 
         gateway = new Gateway(gatewayPort, CommunicationType.TCP);
         worker  = new WorkerComponent(workerPort, "127.0.0.1", gatewayPort, CommunicationType.TCP);
-        client  = new TcpClient();
+        client  = new MarshalledClient(new TcpClient(), new JsonMarshaller());
         serverPort = pickFreePort();
 
         gateway.start();
@@ -113,26 +112,32 @@ class Phase3EndToEndTest {
      */
     @Test
     void writeReadAndOverwriteEndToEnd() throws Exception {
-        String writeReply = client.send("127.0.0.1", gatewayPort, "WRITE|smoke-key|smoke-value");
-        assertTrue(writeReply.contains("smoke-key"),
-                "WRITE reply should mention the key, got: " + writeReply);
-        assertTrue(writeReply.contains("smoke-value"),
-                "WRITE reply should mention the value, got: " + writeReply);
+        Message writeReply = client.send("127.0.0.1", gatewayPort,
+                new Message(Command.WRITE, List.of("smoke-key", "smoke-value")));
+        assertEquals(Command.OK, writeReply.command());
+        assertTrue(writeReply.args().get(0).contains("smoke-key"),
+                "WRITE reply should mention the key, got: " + writeReply.args().get(0));
+        assertTrue(writeReply.args().get(0).contains("smoke-value"),
+                "WRITE reply should mention the value, got: " + writeReply.args().get(0));
 
-        String readReply = client.send("127.0.0.1", gatewayPort, "READ|smoke-key");
-        assertTrue(readReply.contains("smoke-value"),
-                "READ reply should echo the value, got: " + readReply);
+        Message readReply = client.send("127.0.0.1", gatewayPort,
+                new Message(Command.READ, List.of("smoke-key")));
+        assertEquals(Command.OK, readReply.command());
+        assertTrue(readReply.args().get(0).contains("smoke-value"),
+                "READ reply should echo the value, got: " + readReply.args().get(0));
 
         // Overwrite the same key three times; the latest value must win.
-        client.send("127.0.0.1", gatewayPort, "WRITE|k|v1");
-        client.send("127.0.0.1", gatewayPort, "WRITE|k|v2");
-        client.send("127.0.0.1", gatewayPort, "WRITE|k|v3");
+        client.send("127.0.0.1", gatewayPort, new Message(Command.WRITE, List.of("k", "v1")));
+        client.send("127.0.0.1", gatewayPort, new Message(Command.WRITE, List.of("k", "v2")));
+        client.send("127.0.0.1", gatewayPort, new Message(Command.WRITE, List.of("k", "v3")));
 
-        String overwriteRead = client.send("127.0.0.1", gatewayPort, "READ|k");
-        assertTrue(overwriteRead.contains("v3"),
-                "READ after 3 overwrites should return the last value, got: " + overwriteRead);
-        assertFalse(overwriteRead.contains("v1"),
-                "READ after overwrite should NOT return a stale value, got: " + overwriteRead);
+        Message overwriteRead = client.send("127.0.0.1", gatewayPort,
+                new Message(Command.READ, List.of("k")));
+        assertEquals(Command.OK, overwriteRead.command());
+        assertTrue(overwriteRead.args().get(0).contains("v3"),
+                "READ after 3 overwrites should return the last value, got: " + overwriteRead.args().get(0));
+        assertFalse(overwriteRead.args().get(0).contains("v1"),
+                "READ after overwrite should NOT return a stale value, got: " + overwriteRead.args().get(0));
     }
 
     /**
@@ -141,9 +146,7 @@ class Phase3EndToEndTest {
      * transport — without going through the kvstore gateway. This
      * proves the JSON envelope path composes with the existing
      * {@code TcpServer}/{@code TcpClient} stack independently of the
-     * gateway's pipe codec. The existing
-     * {@link #writeReadAndOverwriteEndToEnd()} keeps the pipe codec
-     * contract on the production path.
+     * gateway's router.
      */
     @Test
     void marshallerDecoratorRoundTripsOnTcpTransport() throws Exception {
@@ -151,15 +154,13 @@ class Phase3EndToEndTest {
         // tiny handler, and a MarshalledClient over a TcpClient.
         MarshalledServer marshalledServer = new MarshalledServer(
                 CommunicationFactory.createServer(CommunicationType.TCP),
-                MarshallerFactory.json());
-        marshalledServer.start(serverPort, req -> {
-            Message m = MessageParser.parse(req);
-            return new Message(Command.OK, m.args()).toWireForm();
-        });
+                new JsonMarshaller());
+        marshalledServer.startTyped(serverPort, msg ->
+                new Message(Command.OK, msg.args()));
 
         MarshalledClient marshalledClient = new MarshalledClient(
                 CommunicationFactory.createClient(CommunicationType.TCP),
-                MarshallerFactory.json());
+                new JsonMarshaller());
 
         Message resp = marshalledClient.send("127.0.0.1", serverPort,
                 new Message(Command.WRITE, List.of("alpha", "beta")));

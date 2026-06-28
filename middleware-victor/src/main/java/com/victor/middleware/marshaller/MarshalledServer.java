@@ -87,6 +87,22 @@ public class MarshalledServer implements ComponentServer {
         inner.start(port, adapter);
     }
 
+    /**
+     * Legacy {@link ComponentServer} SPI kept only so the decorator can
+     * still be assigned to a {@code ComponentServer} variable. Production
+     * callers must use {@link #startTyped(int, TypedRequestHandler)}; this
+     * method throws on call because there is no meaningful way to start
+     * the decorator without a typed handler.
+     */
+    @Override
+    @Deprecated
+    public void start(int port, RequestHandler handler) {
+        throw new UnsupportedOperationException(
+                "MarshalledServer.start(int, RequestHandler) is removed. "
+                        + "Use startTyped(int, TypedRequestHandler) — the JSON "
+                        + "envelope is the only wire shape the decorator speaks.");
+    }
+
     @Override
     public void stop() {
         inner.stop();

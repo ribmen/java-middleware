@@ -1,8 +1,8 @@
 # PDF Checklist — `Descrição do Segundo Trabalho Prático`
 
 Mapping each PDF requirement to the concrete file/line evidence in the repo.
-Last refreshed: 2026-06-23, after Phase 5D (Annotation Model — signature-preserving
-`@MethodMapping` + `@Param`).
+Last refreshed: 2026-06-24, after the pipe-codec removal (Phase 5X —
+unified wire on JSON envelope; Requisito 4 now ✅).
 
 ---
 
@@ -71,7 +71,7 @@ become invokable remotely. Both PDF styles are now supported:
 |---|---|
 | Server Request Handler | `spi/RequestHandler` — `@FunctionalInterface String handle(String)`. |
 | Invoker | `invoker/Dispatcher.java` — central dispatch table keyed by `Command`. 6 unit tests. |
-| Marshaller | `marshaller/JsonMarshaller` — Jackson-backed codec producing the envelope `{"verb":"…","args":[…],"body":{}}`. Wired in as the decorator layer via `MarshalledServer` / `MarshalledClient`. Error path uses `MarshalException` (statusCode 400/500). The pipe codec in `MessageParser` stays in production as the Layer-1 transport codec; both codecs round-trip the same `Message(Command, args)` value type. | ✅ |
+| Marshaller | `marshaller/JsonMarshaller` — Jackson-backed codec producing the envelope `{"verb":"…","args":[…],"body":{}}`. **Sole wire codec** — every cross-JVM boundary (HTTP/TCP/UDP, Gateway↔worker, worker↔registry) passes through it via `MarshalledServer` / `MarshalledClient`. Error path uses `MarshalException` (statusCode 400/500). The `MessageParser` pipe codec was removed; only the JSON envelope travels on the wire. | ✅ |
 | Remote Object | `kvstore/business/KVStore.java` — the actual remote object, invoked through `WorkerComponent.getRequestHandler`. |
 | Remoting Error | `exceptions/MiddlewareException` + `ConnectionException` + `ProtocolException` + `NoAvailableNodeException`. Each carries an `origin` tag (`"HTTP"` / `"TCP"` / `"UDP"` / `"PARSER"`) for caller diagnostics. |
 
@@ -112,20 +112,25 @@ become invokable remotely. Both PDF styles are now supported:
 
 ## Requisito 4 — Testes de Carga com JMeter
 
-**Status: NOT DONE.** No `.jmx` files exist in the repo. Required for the
-presentation day per the PDF ("todos os testes devem estar preparados e
-configurados antecipadamente").
+**Status: ✅ DONE.** `jmeter-tests/kvstore_load_test.jmx` is a stock-JMeter
+plan (no jp@gc plugins) with:
+- 1 enabled `KVStore Load Thread Group` (defaults: 50 threads, 10s ramp-up,
+  scheduler-driven 60s duration — overridable via `-Jthreads=N`,
+  `-Jrampup=N`, `-Jduration=N`, `-Jgateway_host=…`, `-Jgateway_port=…`)
+- 4 `HTTPSamplerProxy` samplers (`01 - WRITE`, `02 - READ`,
+  `03 - REGISTER`, `04 - HEARTBEAT`) posting the typed JSON envelope
+  (`{"verb":"…","args":[…],"body":{}}`) — the same shape the production
+  `MarshalledServer` decodes
+- 4 `ResponseAssertion` checks pinning the wire-shape of each response
+- `View Results Tree` + `Summary Report` listeners
 
-Suggested next phase (Phase 5+) — *not* part of Phase 4 per user direction:
-
-1. Export a `HelloServer` demo from `middleware-victor` that exposes a single
-   `kvstore` operation (e.g. `READ`) over HTTP. Entry point documented in
-   `docs/HELLO-SERVER.md`.
-2. Add a `jmeter/` directory at repo root with one `.jmx` plan:
-   - Thread Group ramping 1 → 50 → 200 threads over 60s
-   - HTTP Request sampler → `POST /WRITE HTTP/1.1` with a JSON body
-   - Summary Report listener
-3. Capture latency at 1/10/50/100/200/400 threads → Knee/Usable Capacity.
+Demo path (4 steps): (1) `cd kvstore && mvn exec:java
+-Dexec.mainClass=com.victor.Gateway -Dexec.args="8000 HTTP"`,
+(2) in another terminal `mvn exec:java -Dexec.mainClass=com.victor.WorkerComponent
+-Dexec.args="8001 localhost 8000 HTTP"`,
+(3) `cd jmeter-tests && jmeter -t kvstore_load_test.jmx`,
+(4) Run → Start; ramp threads 10 → 50 → 200 in the GUI to exercise
+Requisito 5 in real time.
 
 ---
 
@@ -153,13 +158,15 @@ Output target: a `docs/capacity.md` with two plots or CSV tables.
 | Identification Patterns | 1.0 | 3/3 ✅ | — |
 | Lifecycle Management | 2.0 | 4/8 (Static ✅, Per-Request ✅, Pooling ✅, Leasing ✅) | Client-Dependent Instance + Passivation pendentes |
 | Extension Patterns | 3.0 | 3/3 (Invocation Interceptor ✅, Invocation Context ✅, Protocol Plug-In ✅) | — |
-| Testes JMeter | req. #4 | Não iniciado | — |
-| Knee/Usable Capacity | req. #5 | Não iniciado | depende de JMeter |
+| Testes JMeter | req. #4 | ✅ `jmeter-tests/kvstore_load_test.jmx` (stock JMeter, JSON envelope) | — |
+| Knee/Usable Capacity | req. #5 | Não iniciado | demo path pronto no Requisito 4; rodar ramp 10→50→200 e plotar |
 
-**Para nota máxima**: faltam Client-Dependent Instance, Passivation,
-JMeter + capacity. Estimativa de cobertura atual: ~9.5 / 10.0 na rubrica
-individual (Extension Patterns 3/3; Basic Remoting Patterns 5/5; Modelo de
-Componentes agora 2/2 — básico + signature-preserving).
+**Para nota máxima**: faltam Client-Dependent Instance, Passivation, e a
+medição analítica de Knee/Usable Capacity (demo path do Requisito 4 já
+está pronto — basta executar e capturar a tabela). Estimativa de cobertura
+atual: ~9.7 / 10.0 na rubrica individual (Extension Patterns 3/3;
+Basic Remoting Patterns 5/5; Modelo de Componentes 2/2 — básico +
+signature-preserving; Requisito 4 entregue).
 
 ---
 
