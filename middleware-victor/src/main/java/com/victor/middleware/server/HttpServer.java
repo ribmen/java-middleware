@@ -180,11 +180,57 @@ public class HttpServer implements ComponentServer {
             return 503;
         }
 
+        // Phase 5X — pipe codec removal. The wire shape is now the JSON
+        // envelope, so the old "|ERRO" substring sniff no longer fires.
+        // Recognize the new envelope shapes:
+        //   - MarshalledServer error path:   {"error":"…","code":N}
+        //   - Gateway routeRequest errors:   {"verb":"UNKNOWN","args":["ERRO: …"]}
+        // Both signal a server-side failure (5xx); the explicit code on the
+        // marshaller path wins when present.
+        if (responsePayload.startsWith("{\"error\"")) {
+            int codeFromEnvelope = parseJsonCodeField(responsePayload);
+            if (codeFromEnvelope == 400 || codeFromEnvelope == 500) {
+                return codeFromEnvelope;
+            }
+            return 500;
+        }
+        if (responsePayload.contains("\"verb\":\"UNKNOWN\"")) {
+            return 500;
+        }
+
+        // Legacy pipe-codec sniff, kept for the rare path that still
+        // emits raw pipe strings (e.g. fixtures). Removed once the SPI
+        // gains a typed status channel — see Phase 5X.1 hardening.
         if (normalized.startsWith("ERRO") || normalized.contains("|ERRO")) {
             return 500;
         }
 
         return 200;
+    }
+
+    /**
+     * Parse the {@code "code":N} field out of a MarshalledServer error
+     * envelope without a full JSON dependency. Returns -1 when the
+     * field is absent or not a 3-digit status.
+     */
+    private static int parseJsonCodeField(String envelope) {
+        int idx = envelope.indexOf("\"code\":");
+        if (idx < 0) {
+            return -1;
+        }
+        int start = idx + "\"code\":".length();
+        int end = start;
+        while (end < envelope.length() && Character.isDigit(envelope.charAt(end))) {
+            end++;
+        }
+        if (end == start) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(envelope.substring(start, end));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /**

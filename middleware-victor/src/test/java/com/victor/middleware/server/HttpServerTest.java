@@ -120,6 +120,57 @@ class HttpServerTest {
                 "expected 503 for gateway-down marker in payload, got: " + firstLine(raw));
     }
 
+    /**
+     * Regression pin (Phase 5X — pipe-codec removal). After the wire
+     * format swap to JSON envelopes, the gateway's error responses are
+     * {@code {"verb":"UNKNOWN","args":["ERRO: …"]}} — they no longer
+     * contain the old pipe-codec substring {@code "|ERRO"}. The status
+     * sniff in {@code resolveStatusCode} must recognize the new shape
+     * so error responses don't silently return 200.
+     *
+     * <p>Pinned here as a failing test before the fix lands; this is
+     * the smallest demonstration of the regression. The 503 marker
+     * ("ERRO AO ACESSAR O GATEWAY") still passes through verbatim
+     * because the gateway-emitted text is preserved by marshalling;
+     * only the 500 path regressed.</p>
+     */
+    @Test
+    void jsonEnvelopeUnknownVerbMapsToHttp500() throws Exception {
+        server.stop();
+        port = pickFreePort();
+        server = newServer(req ->
+                "{\"verb\":\"UNKNOWN\",\"args\":[\"ERRO: WRITE_FAILED em localhost/8001: connection refused\"],\"body\":{}}");
+
+        String raw = sendRaw("POST /WRITE HTTP/1.1\r\n" +
+                             "Content-Length: 3\r\n" +
+                             "\r\n" +
+                             "k|v");
+
+        assertTrue(raw.startsWith("HTTP/1.1 500"),
+                "expected HTTP 500 for envelope-shaped error, got: " + firstLine(raw));
+    }
+
+    /**
+     * Companion to the regression pin above. The MarshalledServer
+     * decorator emits an explicit {@code "code":N} field on its
+     * error path; resolveStatusCode must honor that code instead of
+     * defaulting to 500.
+     */
+    @Test
+    void marshalledErrorEnvelopeWithCode400MapsToHttp400() throws Exception {
+        server.stop();
+        port = pickFreePort();
+        server = newServer(req -> "{\"error\":\"bad json\",\"code\":400}");
+
+        String raw = sendRaw("POST /WRITE HTTP/1.1\r\n" +
+                             "Content-Length: 3\r\n" +
+                             "\r\n" +
+                             "k|v");
+
+        assertTrue(raw.startsWith("HTTP/1.1 400"),
+                "expected HTTP 400 for code:400 envelope, got: " + firstLine(raw));
+    }
+
     /** Empty handler payload yields HTTP 500 (resolveStatusCode path). */
     @Test
     void emptyHandlerPayloadMapsToHttp500() throws Exception {
